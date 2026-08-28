@@ -53,6 +53,20 @@ Measured with it: Slack's composer is an `AXTextArea` with a settable value, Not
 
 ## Install
 
+### Download
+
+Grab `Flip-<version>-macos-universal.zip` from the [releases page](../../releases), unzip it, and drag `Flip.app` into `/Applications`. Universal, so it runs on Apple Silicon and Intel.
+
+macOS will refuse to open it the first time, because the app is not notarized. See "Giving it to other people" below for why. Clear the download flag once:
+
+```
+xattr -d com.apple.quarantine /Applications/Flip.app
+```
+
+Or right-click the app, choose Open, and confirm in the dialog. Either works; the `xattr` line is faster and does not depend on which macOS version you are on.
+
+### Or build it
+
 ```
 ./scripts/build.sh
 open build/Flip.app
@@ -156,12 +170,11 @@ A Mac that downloads this app refuses to open it: Gatekeeper reports that Apple 
 2. A "Developer ID Application" certificate issued under that membership.
 3. Notarization: the signed app is uploaded to Apple, scanned, and the returned ticket is stapled into the bundle.
 
-There is no Developer ID certificate on this machine today (`security find-identity -v -p codesigning` returns nothing), so this is a purchase and setup step, not a code change. Once the certificate exists, the only change here is the identity name in `scripts/build.sh` plus a notarization step after it.
+This project has no Developer ID certificate, so that is a purchase and setup step rather than a code change. Once one exists, the change here is the identity in `scripts/release.sh` plus a notarization step after it.
 
-Until then there are two ways to hand it to someone, both awkward for a non-engineer:
+Until then, released builds are signed ad hoc and carry the quarantine flag once downloaded, which is why the install instructions above include the `xattr` line. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
 
-- They clone the repository and run `./scripts/build.sh` themselves. A locally built app carries no quarantine flag, so it opens normally. It needs the Xcode Command Line Tools.
-- You send them the built app and they right-click it and choose Open the first time, or run `xattr -d com.apple.quarantine /Applications/Flip.app`. Some managed Macs block this outright.
+`scripts/release.sh` produces what the releases page carries: a universal binary for Apple Silicon and Intel, ad-hoc signed, archived with `ditto` so the signature survives.
 
 ## Checking what Flip actually received
 
