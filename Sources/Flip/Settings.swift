@@ -49,20 +49,6 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
 
 // MARK: - Languages
 
-enum ShortcutMode: String, CaseIterable, Codable, Identifiable {
-    case automatic
-    case separate
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .automatic: return "One shortcut, decides automatically"
-        case .separate: return "Two shortcuts, one for each"
-        }
-    }
-}
-
 enum CredentialSource: String, CaseIterable, Codable, Identifiable {
     case apiKey
     case cliLogin
@@ -84,9 +70,17 @@ enum Language {
 
     static let all: [String] = [
         "English", "Korean", "Japanese", "Chinese (Simplified)", "Chinese (Traditional)",
-        "Spanish", "French", "German", "Portuguese (Brazil)", "Italian", "Dutch",
-        "Russian", "Vietnamese", "Thai", "Indonesian", "Hindi", "Arabic", "Turkish",
-        "Polish", "Swedish"
+        "Cantonese", "Spanish", "Spanish (Latin America)", "Portuguese (Brazil)",
+        "Portuguese (Portugal)", "French", "French (Canada)", "German", "Italian", "Dutch",
+        "Russian", "Ukrainian", "Polish", "Czech", "Slovak", "Hungarian", "Romanian",
+        "Bulgarian", "Greek", "Turkish", "Arabic", "Hebrew", "Persian", "Hindi", "Bengali",
+        "Urdu", "Tamil", "Telugu", "Marathi", "Gujarati", "Punjabi", "Kannada", "Malayalam",
+        "Thai", "Vietnamese", "Indonesian", "Malay", "Filipino", "Burmese", "Khmer", "Lao",
+        "Mongolian", "Nepali", "Sinhala", "Swedish", "Norwegian", "Danish", "Finnish",
+        "Icelandic", "Estonian", "Latvian", "Lithuanian", "Serbian", "Croatian", "Bosnian",
+        "Slovenian", "Albanian", "Macedonian", "Georgian", "Armenian", "Azerbaijani",
+        "Kazakh", "Uzbek", "Swahili", "Amharic", "Yoruba", "Igbo", "Hausa", "Zulu",
+        "Afrikaans", "Catalan", "Basque", "Galician", "Welsh", "Irish", "Latin"
     ]
 }
 
@@ -116,10 +110,7 @@ final class Settings: ObservableObject {
     @Published var stylePrompt: String { didSet { defaults.set(stylePrompt, forKey: "stylePrompt") } }
     @Published var launchAtLoginEnabled: Bool { didSet { defaults.set(launchAtLoginEnabled, forKey: "launchAtLogin") } }
 
-    @Published var shortcutMode: ShortcutMode { didSet { defaults.set(shortcutMode.rawValue, forKey: "shortcutMode") } }
-    @Published var autoHotkey: HotkeyBinding { didSet { Settings.store(autoHotkey, forKey: "autoHotkey") } }
-    @Published var replaceHotkey: HotkeyBinding { didSet { Settings.store(replaceHotkey, forKey: "replaceHotkey") } }
-    @Published var peekHotkey: HotkeyBinding { didSet { Settings.store(peekHotkey, forKey: "peekHotkey") } }
+    @Published var hotkey: HotkeyBinding { didSet { Settings.store(hotkey, forKey: "hotkey") } }
 
     private static func store(_ binding: HotkeyBinding, forKey key: String) {
         guard let data = try? JSONEncoder().encode(binding) else { return }
@@ -165,10 +156,7 @@ final class Settings: ObservableObject {
         peekLanguage = defaults.string(forKey: "peekLanguage") ?? "Korean"
         stylePrompt = defaults.string(forKey: "stylePrompt") ?? ""
         launchAtLoginEnabled = defaults.bool(forKey: "launchAtLogin")
-        shortcutMode = ShortcutMode(rawValue: defaults.string(forKey: "shortcutMode") ?? "") ?? .automatic
-        autoHotkey = Settings.loadBinding("autoHotkey", default: .defaultAuto)
-        replaceHotkey = Settings.loadBinding("replaceHotkey", default: .defaultReplace)
-        peekHotkey = Settings.loadBinding("peekHotkey", default: .defaultPeek)
+        hotkey = Settings.loadBinding("hotkey", default: Settings.loadBinding("autoHotkey", default: .standard))
         apiKey = Settings.sanitize(Keychain.get(account: "apiKey.\(p.rawValue)") ?? "")
     }
 

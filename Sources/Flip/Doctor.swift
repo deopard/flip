@@ -63,12 +63,10 @@ enum Doctor {
             }
         } else {
             _ = NSApplication.shared
-            let replace = HotkeyManager.shared.register(id: 901, binding: settings.replaceHotkey) {}
-            let peek = HotkeyManager.shared.register(id: 902, binding: settings.peekHotkey) {}
-            print("hotkey \(settings.replaceHotkey.display) replace   \(replace.explanation)   (probed here, Flip is not running)")
-            print("hotkey \(settings.peekHotkey.display) peek      \(peek.explanation)   (probed here, Flip is not running)")
-            if !replace.isOK || !peek.isOK {
-                problems.append("A shortcut is not free. Something else on this Mac owns it: check Raycast, Karabiner, Wispr Flow, Loom, and System Settings > Keyboard > Keyboard Shortcuts.")
+            let probe = HotkeyManager.shared.register(id: 901, binding: settings.hotkey) {}
+            print("hotkey \(settings.hotkey.display)            \(probe.explanation)   (probed here, Flip is not running)")
+            if !probe.isOK {
+                problems.append("The shortcut is not free. Something else on this Mac owns it: check Raycast, Karabiner, Wispr Flow, Loom, and System Settings > Keyboard > Keyboard Shortcuts.")
             }
         }
 

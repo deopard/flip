@@ -27,10 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             DispatchQueue.main.async { self?.registerHotkeys() }
         }
         hotkeyObservers = [
-            settings.$replaceHotkey.dropFirst().sink(receiveValue: reregister),
-            settings.$peekHotkey.dropFirst().sink(receiveValue: reregister),
-            settings.$autoHotkey.dropFirst().sink(receiveValue: reregister),
-            settings.$shortcutMode.dropFirst().sink(receiveValue: reregister)
+            settings.$hotkey.dropFirst().sink { [weak self] _ in
+                DispatchQueue.main.async { self?.registerHotkeys() }
+            }
         ]
 
         // Launching the app a second time reaches Settings even when a menu bar manager
@@ -68,20 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func registerHotkeys() {
         let settings = Settings.shared
         HotkeyManager.shared.unregisterAll()
-        if settings.shortcutMode == .automatic {
-            HotkeyManager.shared.register(id: 3, binding: settings.autoHotkey) { [weak self] in
-                guard let self else { return }
-                Task { @MainActor in await self.run(trigger: .auto) }
-            }
-        } else {
-            HotkeyManager.shared.register(id: 1, binding: settings.replaceHotkey) { [weak self] in
-                guard let self else { return }
-                Task { @MainActor in await self.run(trigger: .replace) }
-            }
-            HotkeyManager.shared.register(id: 2, binding: settings.peekHotkey) { [weak self] in
-                guard let self else { return }
-                Task { @MainActor in await self.run(trigger: .peek) }
-            }
+        HotkeyManager.shared.register(id: 1, binding: settings.hotkey) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in await self.run(trigger: .auto) }
         }
         StatusWriter.write()
         statusItem?.menu = menu()
@@ -160,17 +148,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                  action: #selector(menuReplace), keyEquivalent: "")
         replace.target = self
         menu.addItem(replace)
-        menu.addItem(shortcutHint(settings.shortcutMode == .automatic
-                                  ? settings.autoHotkey.display + "  replaces the text when you are in a field"
-                                  : settings.replaceHotkey.display + "  replaces the text in place"))
+        menu.addItem(shortcutHint(settings.hotkey.display + "  when the selection is in a field you can type in"))
 
         let peek = NSMenuItem(title: "Show translation in \(settings.resolvedTarget(for: .peek).label)",
                               action: #selector(menuPeek), keyEquivalent: "")
         peek.target = self
         menu.addItem(peek)
-        menu.addItem(shortcutHint(settings.shortcutMode == .automatic
-                                  ? settings.autoHotkey.display + "  opens a popup when you are not"
-                                  : settings.peekHotkey.display + "  opens a popup"))
+        menu.addItem(shortcutHint(settings.hotkey.display + "  anywhere else"))
 
         menu.addItem(.separator())
 

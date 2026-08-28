@@ -18,7 +18,7 @@ One shortcut, `⌥⌘'` (option command apostrophe). It decides what you meant:
 
 Write a Slack message in Korean, select it, press the shortcut, and the box now holds the English. Select a message you are reading, press the same shortcut, and a panel shows the Korean.
 
-You can switch to two separate shortcuts in Settings if you would rather say which one you mean.
+There is one shortcut and it is rebindable. The menu bar item also offers both actions explicitly, for the rare case where you want to force one.
 
 ### How it decides
 
@@ -81,9 +81,10 @@ It puts a self-signed certificate called "Flip Dev" in your login Keychain and s
 - **Base URL** — prefilled per provider; change it to point at a compatible gateway.
 - **Model** — free text, with presets per provider. Default is `gpt-5.6-luna`.
 - **Effort** — how hard the model thinks. Sent as `reasoning_effort` to OpenAI and as `output_config.effort` to Anthropic. Default `medium`. If a model does not accept one, Flip retries without it rather than failing.
-- **Replace shortcut translates into** — default English.
-- **Peek shortcut translates into** — default Korean.
-- **Auto swap** — pick this in either list and the app flips between your two configured languages based on what you selected.
+- **Replace with** — the language the in-place replacement is written in. Default English.
+- **Popup shows** — the language the popup is written in. Default Korean.
+- Both are dropdowns you can also type into. The list carries 80 languages; anything you type works too, because the language is passed to the model as a word rather than looked up in a table. "Swiss German" and "Cantonese" both produce what you would expect.
+- **Auto swap** — pick this in either row and Flip flips between the two languages above, based on what you selected.
 - **Custom style prompt** — free text appended to every request. For example: *Business casual. Short sentences. Never use exclamation marks.*
 
 ## History
@@ -168,7 +169,6 @@ One `swiftc` invocation over `Sources/Flip/*.swift`, linked against AppKit, Swif
 ## Limits in this version
 
 - macOS only. Windows is planned; the translation, settings, and history layers are platform independent, only text reading, pasting, and hotkeys would need a Windows implementation.
-- Shortcuts are fixed. There is no recorder yet.
 - 8,000 characters per translation.
 - No streaming. The popup shows a spinner until the whole translation arrives.
 

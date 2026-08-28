@@ -18,18 +18,9 @@ struct HotkeyBinding: Codable, Equatable {
         return out + keyLabel
     }
 
-    /// The single shortcut. Same keys as the replace shortcut it supersedes, so the habit
-    /// carries over.
-    static let defaultAuto = HotkeyBinding(keyCode: UInt32(kVK_ANSI_Quote),
-                                           carbonModifiers: UInt32(optionKey | cmdKey),
-                                           keyLabel: "'")
-
-    static let defaultReplace = HotkeyBinding(keyCode: UInt32(kVK_ANSI_Quote),
-                                              carbonModifiers: UInt32(optionKey | cmdKey),
-                                              keyLabel: "'")
-    static let defaultPeek = HotkeyBinding(keyCode: UInt32(kVK_ANSI_Semicolon),
-                                           carbonModifiers: UInt32(optionKey | cmdKey),
-                                           keyLabel: ";")
+    static let standard = HotkeyBinding(keyCode: UInt32(kVK_ANSI_Quote),
+                                        carbonModifiers: UInt32(optionKey | cmdKey),
+                                        keyLabel: "'")
 
     /// Builds a binding from a captured key press. Returns nil for a press that would make a
     /// useless global shortcut, that is one with no command, option or control.

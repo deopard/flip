@@ -170,14 +170,14 @@ struct SettingsView: View {
     }
 
     private var languages: some View {
-        section("Languages", "Pick \"Auto swap\" in either row and Flip flips between the two languages below, based on what you selected.") {
+        section("Languages", "Pick from the list or type any language, including ones not listed. \"Auto swap\" in either row flips between the two languages below, based on what you selected.") {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 9) {
                 GridRow {
-                    label(settings.shortcutMode == .automatic ? "Replace with" : "Replace \(settings.replaceHotkey.display)")
+                    label("Replace with")
                     languagePicker($settings.replaceLanguage)
                 }
                 GridRow {
-                    label(settings.shortcutMode == .automatic ? "Popup shows" : "Peek \(settings.peekHotkey.display)")
+                    label("Popup shows")
                     languagePicker($settings.peekLanguage)
                 }
             }
@@ -196,25 +196,11 @@ struct SettingsView: View {
     }
 
     private var shortcuts: some View {
-        section("Shortcuts", "Click a shortcut and press the keys you want. It must include command, option or control.") {
-            Picker("", selection: $settings.shortcutMode) {
-                ForEach(ShortcutMode.allCases) { Text($0.displayName).tag($0) }
-            }
-            .labelsHidden()
-            .pickerStyle(.radioGroup)
-
+        section("Shortcut", "Click it and press the keys you want. It must include command, option or control.") {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 10) {
-                if settings.shortcutMode == .automatic {
-                    shortcutRow($settings.autoHotkey, fallback: .defaultAuto,
-                                "Replaces the text when the selection is inside a field you can type in. Shows a popup otherwise. Where it cannot tell, it shows the popup rather than overwriting anything.")
-                } else {
-                    shortcutRow($settings.replaceHotkey, fallback: .defaultReplace,
-                                "Translate the selection and replace it in place. With nothing selected, translates the whole text field.")
-                    shortcutRow($settings.peekHotkey, fallback: .defaultPeek,
-                                "Translate the selection and show it in a popup. Nothing on screen changes.")
-                }
+                shortcutRow($settings.hotkey, fallback: .standard,
+                            "Replaces the text when the selection is inside a field you can type in, and shows a popup otherwise. Where it cannot tell, it shows the popup rather than overwriting anything. A password field is refused.")
             }
-            .padding(.top, 2)
         }
     }
 
@@ -255,13 +241,10 @@ struct SettingsView: View {
     }
 
     private func languagePicker(_ binding: Binding<String>) -> some View {
-        Picker("", selection: binding) {
-            Text(Language.autoSwap).tag(Language.autoSwap)
-            Divider()
-            ForEach(Language.all, id: \.self) { Text($0).tag($0) }
-        }
-        .labelsHidden()
-        .frame(width: 240)
+        ComboBoxField(text: binding,
+                      options: [Language.autoSwap] + Language.all,
+                      placeholder: "language")
+            .frame(width: 240, height: 24)
     }
 
     private func section<Content: View>(_ title: String, _ note: String?,
