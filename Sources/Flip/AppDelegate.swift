@@ -33,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 Task { @MainActor in self?.openSettings() }
             }
 
+        // Record what this process can actually do, so --doctor reports the app's answer
+        // instead of inheriting the terminal's permissions and reporting its own.
+        StatusWriter.start()
+
         if !TextAccess.hasAccessibilityPermission() {
             TextAccess.requestAccessibilityPermission()
         }

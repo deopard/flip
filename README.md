@@ -64,13 +64,15 @@ Stored at `~/Library/Application Support/Flip/history.json`, on your machine onl
 
 ## When a shortcut does nothing
 
-Run the built-in diagnostic. Quit the menu bar app first, otherwise the running copy already owns the shortcuts and the probe cannot tell that apart from another app owning them.
+Run the built-in diagnostic **while Flip is running**:
 
 ```
 build/Flip.app/Contents/MacOS/Flip --doctor
 ```
 
 It reports, and tells you how to fix, each of: Accessibility permission, whether each shortcut actually registered or is owned by another app, whether an API key is stored, the provider and model in use, and whether a menu bar manager such as Ice is hiding the status icon.
+
+Accessibility and hotkey lines come from a status file the running app writes, not from a check inside the diagnostic. That is deliberate. Accessibility trust belongs to the process that asks: a command-line tool started from a terminal that already holds the permission inherits it and will report "granted" no matter what the app bundle is actually allowed to do. Only the running app can answer for the running app.
 
 ## Storing the key from the terminal
 

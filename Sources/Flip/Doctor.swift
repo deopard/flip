@@ -3,8 +3,10 @@ import ApplicationServices
 import Foundation
 
 /// `Flip --doctor` prints everything that has to be true for the shortcuts to work.
-/// Run it with the menu bar app quit, otherwise the running copy already owns the hotkeys
-/// and the probe below cannot tell that apart from another app owning them.
+///
+/// Accessibility and hotkey state are read from the status file the running app writes, not
+/// checked in this process, because both are per-process facts that a command-line tool would
+/// answer for itself rather than for the app. Start Flip before running this.
 @MainActor
 enum Doctor {
 
@@ -29,21 +31,45 @@ enum Doctor {
             print("                    quit it before trusting the hotkey lines below")
         }
 
-        // 2. Accessibility
-        let trusted = AXIsProcessTrusted()
-        print("accessibility       \(trusted ? "granted" : "NOT granted")")
-        if !trusted {
-            problems.append("Turn Flip on in System Settings, Privacy & Security, Accessibility. If it is already on, switch it off and on again: a rebuild changes the app signature and macOS drops the old grant.")
+        // 2. Accessibility, as answered by the app itself.
+        //
+        // Deliberately NOT AXIsProcessTrusted() in this process. Accessibility trust belongs
+        // to the asking process. A command-line tool started from a terminal that already holds
+        // the permission inherits it and would report "granted" whatever the app bundle is
+        // actually allowed to do. Only the running app can answer for the running app.
+        let status = FlipStatus.read()
+        if let status, status.isLive {
+            let age = Int(Date().timeIntervalSince(status.updatedAt))
+            print("accessibility       \(status.accessibility ? "granted" : "NOT granted")   (reported by the running app \(age)s ago)")
+            if !status.accessibility {
+                problems.append("Flip is running but macOS is not letting it read your selection. Turn Flip on in System Settings, Privacy & Security, Accessibility. If the switch is already on, quit Flip and open it again: the permission is read when the app starts.")
+            }
+        } else if let status {
+            print("accessibility       \(status.accessibility ? "granted" : "NOT granted")   (stale: last run, pid \(status.pid), is gone)")
+            problems.append("Start Flip and run this again. The line above is from an earlier run.")
+        } else {
+            print("accessibility       unknown, Flip has not run yet")
+            problems.append("Start Flip once, then run this again. This tool cannot check the permission on the app's behalf: run from a terminal it would inherit the terminal's own permissions and tell you nothing about the app.")
         }
 
         // 3. Hotkeys
-        _ = NSApplication.shared
-        let replace = HotkeyManager.shared.register(id: 901, combo: HotkeyManager.replaceCombo) {}
-        let peek = HotkeyManager.shared.register(id: 902, combo: HotkeyManager.peekCombo) {}
-        print("hotkey \(HotkeyManager.replaceCombo.display) replace   \(replace.explanation)")
-        print("hotkey \(HotkeyManager.peekCombo.display) peek      \(peek.explanation)")
-        if !replace.isOK || !peek.isOK {
-            problems.append("A shortcut is not free. Something else on this Mac owns it: check Raycast, Karabiner, Wispr Flow, Loom, and System Settings > Keyboard > Keyboard Shortcuts.")
+        if let status, status.isLive, !status.hotkeys.isEmpty {
+            for (combo, explanation) in status.hotkeys.sorted(by: { $0.key < $1.key }) {
+                print("hotkey \(combo)            \(explanation)   (reported by the running app)")
+            }
+            let broken = status.hotkeys.filter { $0.value != "registered" }
+            if !broken.isEmpty {
+                problems.append("A shortcut is not free: \(broken.keys.joined(separator: ", ")). Something else on this Mac owns it. Check Raycast, Karabiner, Wispr Flow, Loom, and System Settings > Keyboard > Keyboard Shortcuts.")
+            }
+        } else {
+            _ = NSApplication.shared
+            let replace = HotkeyManager.shared.register(id: 901, combo: HotkeyManager.replaceCombo) {}
+            let peek = HotkeyManager.shared.register(id: 902, combo: HotkeyManager.peekCombo) {}
+            print("hotkey \(HotkeyManager.replaceCombo.display) replace   \(replace.explanation)   (probed here, Flip is not running)")
+            print("hotkey \(HotkeyManager.peekCombo.display) peek      \(peek.explanation)   (probed here, Flip is not running)")
+            if !replace.isOK || !peek.isOK {
+                problems.append("A shortcut is not free. Something else on this Mac owns it: check Raycast, Karabiner, Wispr Flow, Loom, and System Settings > Keyboard > Keyboard Shortcuts.")
+            }
         }
 
         // 4. Credentials and configuration
