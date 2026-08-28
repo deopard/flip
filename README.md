@@ -55,15 +55,14 @@ Measured with it: Slack's composer is an `AXTextArea` with a settable value, Not
 
 ### Download
 
-Grab `Flip-<version>-macos-universal.zip` from the [releases page](../../releases), unzip it, and drag `Flip.app` into `/Applications`. Universal, so it runs on Apple Silicon and Intel.
+1. Get `Flip-<version>-macos-universal.zip` from the [releases page](../../releases). Universal, so it runs on Apple Silicon and Intel.
+2. Unzip it and drag `Flip.app` into your **Applications** folder.
+3. **Right-click** (or control-click) `Flip.app` and choose **Open**. Do not double-click it the first time.
+4. A dialog says macOS cannot verify the developer. Click **Open**.
 
-macOS will refuse to open it the first time, because the app is not notarized. See "Giving it to other people" below for why. Clear the download flag once:
+Step 3 matters. Double-clicking gives you a dialog with no way to continue, because the app is not notarized: this project has no Apple Developer Program membership, which is what notarization requires. Right-clicking and choosing Open is the supported way to run an app anyway, and macOS remembers the decision, so you only do it once.
 
-```
-xattr -d com.apple.quarantine /Applications/Flip.app
-```
-
-Or right-click the app, choose Open, and confirm in the dialog. Either works; the `xattr` line is faster and does not depend on which macOS version you are on.
+If your Mac is managed by an employer, this may be blocked outright. Building from source is then the only route, and it is the section below.
 
 ### Or build it
 
@@ -172,7 +171,7 @@ A Mac that downloads this app refuses to open it: Gatekeeper reports that Apple 
 
 This project has no Developer ID certificate, so that is a purchase and setup step rather than a code change. Once one exists, the change here is the identity in `scripts/release.sh` plus a notarization step after it.
 
-Until then, released builds are signed ad hoc and carry the quarantine flag once downloaded, which is why the install instructions above include the `xattr` line. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
+Until then, released builds are signed ad hoc and carry the quarantine flag once downloaded, which is why the install instructions above start with right-click, Open. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
 
 `scripts/release.sh` produces what the releases page carries: a universal binary for Apple Silicon and Intel, ad-hoc signed, archived with `ditto` so the signature survives.
 
