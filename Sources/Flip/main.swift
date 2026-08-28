@@ -61,18 +61,17 @@ if arguments.first == "--popup-demo" {
 //   Flip --probe-focus [seconds]
 if arguments.first == "--probe-focus" {
     let delay = Double(arguments.count > 1 ? arguments[1] : "5") ?? 5
-    FileHandle.standardError.write(Data("Click into the field you want to inspect. Probing in \(Int(delay))s...\n".utf8))
+    FileHandle.standardError.write(Data("Select some text and leave the pointer over it. Probing in \(Int(delay))s...\n".utf8))
     Thread.sleep(forTimeInterval: delay)
     MainActor.assumeIsolated {
         _ = NSApplication.shared
         let info = TextAccess.focusInfo()
         print("app       \(info.appName ?? "unknown")")
         print("focus     \(info.summary)")
-        if let rect = TextAccess.selectionBounds() {
-            print("selection x=\(Int(rect.minX)) y=\(Int(rect.minY)) w=\(Int(rect.width)) h=\(Int(rect.height))  (cocoa coords)")
-        } else {
-            print("selection bounds unavailable; the popup would fall back to the pointer")
-        }
+        print("selection bounds, per source:")
+        for line in TextAccess.selectionBoundsReport() { print(line) }
+        let live = FlipStatus.read().flatMap { $0.isLive ? $0 : nil }
+        print("  last drag, from the running app:  \(live?.lastDrag ?? "Flip is not running")")
         print("decision  \(AutoMode.focusOnlyDescription())")
         print("          the shortcut also copies, to read the real text and to see whether")
         print("          the selection is inside this element or somewhere else")

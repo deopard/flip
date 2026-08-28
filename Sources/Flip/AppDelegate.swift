@@ -43,6 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Record what this process can actually do, so --doctor reports the app's answer
         // instead of inheriting the terminal's permissions and reporting its own.
         StatusWriter.start()
+        DragTracker.shared.start()
+
+        // Off the main thread, because a Keychain read can sit behind a system password dialog.
+        Settings.shared.loadAPIKey()
 
         if !TextAccess.hasAccessibilityPermission() {
             TextAccess.requestAccessibilityPermission()
@@ -224,7 +228,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // --- work out what to do and what text to work on ---
         // Where the selection sits on screen, read now: the synthetic copy below can move or
         // clear it, and the panel is placed against it rather than against the pointer.
-        PopupPanel.shared.captureAnchor(await offMain { TextAccess.selectionBounds() })
+        // Accessibility first, since it gives the exact glyph rectangle where an app answers
+        // for it. The last drag is the universal fallback: it needs no cooperation at all.
+        let axRect = await offMain { TextAccess.selectionBounds() }
+        PopupPanel.shared.captureAnchor(axRect ?? DragTracker.shared.recentDragRect)
 
         // The selected text always comes from the clipboard, never from Accessibility.
         // Electron apps flatten their accessibility strings: every line break disappears and

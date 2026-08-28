@@ -154,22 +154,32 @@ enum TextAccess {
 
     /// Screen rectangle of the selected text, in Cocoa coordinates.
     ///
-    /// Accessibility reports this through `AXBoundsForRange`, in screen coordinates with the
-    /// origin at the top left of the primary display and y increasing downward, which is the
-    /// opposite of AppKit. Returns nil when nothing usable is selected, or when the app does
-    /// not answer the query.
+    /// Accessibility reports these in screen coordinates with the origin at the top left of the
+    /// primary display and y increasing downward, which is the opposite of AppKit.
+    ///
+    /// Native apps answer `AXBoundsForRange` against `AXSelectedTextRange`. Web content does
+    /// not: Chromium, and so every Electron app, describes positions inside a page with text
+    /// markers instead, and answers `AXBoundsForTextMarkerRange`. Slack's focused element is an
+    /// `AXGroup` that reports a selected range it will not give bounds for. Both are tried, on
+    /// the focused element and on the element under the pointer, which after a drag is the text
+    /// that was just dragged across even when focus stayed somewhere else.
     static func selectionBounds() -> NSRect? {
-        // The focused element first: keyboard selections and selections inside the field you
-        // are typing in live there.
-        if let element = focusedElement(), let rect = boundsOfSelection(in: element) { return rect }
-
-        // Otherwise the element under the pointer, which after a drag is the text just dragged
-        // across, even when focus stayed somewhere else.
-        let mouse = NSEvent.mouseLocation
-        if let element = elementAt(cocoaPoint: mouse), let rect = boundsOfSelection(in: element) {
-            return rect
+        for element in candidateElements() {
+            if let rect = boundsFromRange(element) { return rect }
+            if let rect = boundsFromTextMarkers(element) { return rect }
+        }
+        // Web content often hangs the selection off a descendant of the focused element.
+        for element in candidateElements() {
+            if let rect = searchDescendants(element, depth: 0) { return rect }
         }
         return nil
+    }
+
+    private static func candidateElements() -> [AXUIElement] {
+        var elements: [AXUIElement] = []
+        if let focused = focusedElement() { elements.append(focused) }
+        if let under = elementAt(cocoaPoint: NSEvent.mouseLocation) { elements.append(under) }
+        return elements
     }
 
     private static func elementAt(cocoaPoint: NSPoint) -> AXUIElement? {
@@ -184,11 +194,11 @@ enum TextAccess {
         return element
     }
 
-    private static func boundsOfSelection(in element: AXUIElement) -> NSRect? {
+    /// The native path: a character range, then the rectangle that range occupies.
+    static func boundsFromRange(_ element: AXUIElement) -> NSRect? {
         var rangeValue: AnyObject?
         guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
               let rangeValue else { return nil }
-
         var range = CFRange()
         guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &range), range.length > 0 else { return nil }
 
@@ -198,11 +208,47 @@ enum TextAccess {
                                                          rangeValue as CFTypeRef,
                                                          &boundsValue) == .success,
               let boundsValue else { return nil }
+        return decodeRect(boundsValue)
+    }
 
+    /// The web-content path. These attribute names are not in the public headers but are what
+    /// WebKit defined and Chromium implements, so they are how you get a selection rectangle
+    /// out of anything rendering a web page.
+    static func boundsFromTextMarkers(_ element: AXUIElement) -> NSRect? {
+        var markerRange: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, "AXSelectedTextMarkerRange" as CFString, &markerRange) == .success,
+              let markerRange else { return nil }
+
+        var boundsValue: AnyObject?
+        guard AXUIElementCopyParameterizedAttributeValue(element,
+                                                         "AXBoundsForTextMarkerRange" as CFString,
+                                                         markerRange as CFTypeRef,
+                                                         &boundsValue) == .success,
+              let boundsValue else { return nil }
+        return decodeRect(boundsValue)
+    }
+
+    /// Breadth-limited walk. Web content puts the selection on a node below the element that
+    /// holds focus, but going deep or wide here costs a synchronous message per element.
+    private static func searchDescendants(_ element: AXUIElement, depth: Int) -> NSRect? {
+        guard depth < 4 else { return nil }
+        var childrenValue: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenValue) == .success,
+              let children = childrenValue as? [AXUIElement] else { return nil }
+
+        for child in children.prefix(12) {
+            if let rect = boundsFromRange(child) { return rect }
+            if let rect = boundsFromTextMarkers(child) { return rect }
+            if let rect = searchDescendants(child, depth: depth + 1) { return rect }
+        }
+        return nil
+    }
+
+    private static func decodeRect(_ value: AnyObject) -> NSRect? {
         var rect = CGRect.zero
-        guard AXValueGetValue(boundsValue as! AXValue, .cgRect, &rect),
+        guard CFGetTypeID(value) == AXValueGetTypeID(),
+              AXValueGetValue(value as! AXValue, .cgRect, &rect),
               rect.width > 0, rect.height > 0 else { return nil }
-
         return flipToCocoa(rect)
     }
 
@@ -218,6 +264,25 @@ enum TextAccess {
                       y: primary.maxY - rect.origin.y - rect.height,
                       width: rect.width,
                       height: rect.height)
+    }
+
+    /// Which of the attempts above an app actually answers, for --probe-focus.
+    static func selectionBoundsReport() -> [String] {
+        var lines: [String] = []
+        func describe(_ label: String, _ element: AXUIElement?) {
+            guard let element else { lines.append("  \(label): no element"); return }
+            let byRange = boundsFromRange(element)
+            let byMarker = boundsFromTextMarkers(element)
+            lines.append("  \(label) AXBoundsForRange:           \(format(byRange))")
+            lines.append("  \(label) AXBoundsForTextMarkerRange: \(format(byMarker))")
+        }
+        func format(_ rect: NSRect?) -> String {
+            guard let rect else { return "no answer" }
+            return "x=\(Int(rect.minX)) y=\(Int(rect.minY)) w=\(Int(rect.width)) h=\(Int(rect.height))"
+        }
+        describe("focused element  ", focusedElement())
+        describe("element at cursor", elementAt(cocoaPoint: NSEvent.mouseLocation))
+        return lines
     }
 
     // MARK: - Synthetic keystrokes

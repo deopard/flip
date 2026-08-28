@@ -14,6 +14,7 @@ struct FlipStatus: Codable {
     var hotkeys: [String: String]
     var pid: Int32
     var updatedAt: Date
+    var lastDrag: String?
 
     static var fileURL: URL {
         let base = FileManager.default
@@ -55,7 +56,8 @@ enum StatusWriter {
         let status = FlipStatus(accessibility: TextAccess.hasAccessibilityPermission(),
                                 hotkeys: hotkeys,
                                 pid: ProcessInfo.processInfo.processIdentifier,
-                                updatedAt: Date())
+                                updatedAt: Date(),
+                                lastDrag: DragTracker.shared.report)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(status) else { return }

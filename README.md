@@ -35,7 +35,13 @@ The text itself always comes from the clipboard, never from Accessibility, even 
 
 A field the app marks as secure, such as a password box, is refused outright under every shortcut. Flip will neither read it nor paste over it.
 
-The popup is placed against the selection, not the pointer: aligned with its left edge and directly below it, flipping above when there is no room. Where the app does not answer `AXBoundsForRange`, and not all do, it falls back to the pointer.
+The popup is placed against the selection, not the pointer: aligned with its left edge and directly below it, flipping above when there is no room. Three ways to find that rectangle, in order:
+
+1. `AXBoundsForRange` on the selected character range. Exact, and what native apps answer.
+2. `AXBoundsForTextMarkerRange`. Web content describes positions with text markers rather than character ranges, so this is the one Chromium and every Electron app answers. Slack's focused element is an `AXGroup` that reports a selected range and then refuses to give bounds for it.
+3. The last mouse drag, recorded by Flip while it runs. This needs no cooperation from the app at all: the pointer went down at one corner of the text and came up at the other.
+
+The pointer itself is the last resort.
 
 Check what it will do in any app with `--probe-focus`, which reports the focused element's role, whether its value can be written, and the decision that follows:
 

@@ -124,7 +124,24 @@ final class Settings: ObservableObject {
     }
 
     /// Stored in the login Keychain, never in UserDefaults.
-    @Published var apiKey: String { didSet { Keychain.set(Settings.sanitize(apiKey), account: keychainAccount) } }
+    /// Stored in the login Keychain, never in a plain file.
+    ///
+    /// Never read during init. A Keychain item's access control is bound to the path of the app
+    /// that created it, so moving the app makes macOS put up a password dialog, and
+    /// `SecItemCopyMatching` blocks until it is answered. Doing that on the main thread during
+    /// launch freezes the whole app, menu bar included, behind a dialog the user may not have
+    /// noticed.
+    @Published var apiKey: String {
+        didSet {
+            guard apiKeyLoaded else { return }      // do not write back what we just read
+            let value = Settings.sanitize(apiKey)
+            let account = keychainAccount
+            DispatchQueue.global(qos: .utility).async { Keychain.set(value, account: account) }
+        }
+    }
+
+    private var apiKeyLoaded = false
+    private let keychainQueue = DispatchQueue(label: "video.cutback.flip.keychain", qos: .userInitiated)
 
     static let effortUnset = "Not set"
 
@@ -138,7 +155,27 @@ final class Settings: ObservableObject {
         String(raw.unicodeScalars.filter { $0.value > 0x20 && $0.value != 0x7F })
     }
 
-    /// The key as it should be sent. Always use this, never `apiKey`, when building a request.
+    /// Reads the key off the main thread and publishes it. Safe to call repeatedly.
+    func loadAPIKey() {
+        let account = keychainAccount
+        keychainQueue.async { [weak self] in
+            let value = Settings.sanitize(Keychain.get(account: account) ?? "")
+            DispatchQueue.main.async {
+                guard let self, self.keychainAccount == account else { return }
+                self.apiKeyLoaded = true
+                self.apiKey = value
+            }
+        }
+    }
+
+    /// The key as it should be sent, waiting for the Keychain if it has not been read yet.
+    /// Never call this from the main thread.
+    func usableAPIKeyBlocking() -> String {
+        if apiKeyLoaded { return Settings.sanitize(apiKey) }
+        return Settings.sanitize(Keychain.get(account: keychainAccount) ?? "")
+    }
+
+    /// What the interface shows. Empty until `loadAPIKey()` has finished.
     var usableAPIKey: String { Settings.sanitize(apiKey) }
 
     /// True when this configuration takes its credential from the Anthropic CLI rather than a
@@ -157,14 +194,16 @@ final class Settings: ObservableObject {
         stylePrompt = defaults.string(forKey: "stylePrompt") ?? ""
         launchAtLoginEnabled = defaults.bool(forKey: "launchAtLogin")
         hotkey = Settings.loadBinding("hotkey", default: Settings.loadBinding("autoHotkey", default: .standard))
-        apiKey = Settings.sanitize(Keychain.get(account: "apiKey.\(p.rawValue)") ?? "")
+        apiKey = ""                                  // filled in by loadAPIKey(), off the main thread
     }
 
     /// Called when the provider changes so the key/base URL follow it.
     func providerChanged(to newProvider: Provider) {
         provider = newProvider
         baseURL = newProvider.defaultBaseURL
-        apiKey = Settings.sanitize(Keychain.get(account: "apiKey.\(newProvider.rawValue)") ?? "")
+        apiKeyLoaded = false
+        apiKey = ""
+        loadAPIKey()
         if !newProvider.suggestedModels.contains(model) {
             model = newProvider.suggestedModels[0]
         }

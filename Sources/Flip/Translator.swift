@@ -82,8 +82,14 @@ enum Translator {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TranslatorError.emptyInput }
         guard trimmed.count <= maxCharacters else { throw TranslatorError.tooLong(trimmed.count) }
+        // Off the main thread: a Keychain read can block behind a system password dialog.
+        let apiKey: String = settings.usesCLILogin ? "" : await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: settings.usableAPIKeyBlocking())
+            }
+        }
         if !settings.usesCLILogin {
-            guard !settings.usableAPIKey.isEmpty else { throw TranslatorError.missingKey }
+            guard !apiKey.isEmpty else { throw TranslatorError.missingKey }
         }
 
         let system = systemPrompt(target: settings.resolvedTarget(for: mode), style: settings.stylePrompt)
@@ -92,9 +98,9 @@ enum Translator {
         let output: String
         switch settings.provider {
         case .openai:
-            output = try await callOpenAI(system: system, user: text, settings: settings)
+            output = try await callOpenAI(system: system, user: text, settings: settings, apiKey: apiKey)
         case .anthropic:
-            output = try await callAnthropic(system: system, user: text, settings: settings)
+            output = try await callAnthropic(system: system, user: text, settings: settings, apiKey: apiKey)
         }
 
         let cleaned = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -145,26 +151,26 @@ enum Translator {
 
     // MARK: - OpenAI and OpenAI-compatible
 
-    private static func callOpenAI(system: String, user: String, settings: Settings) async throws -> String {
+    private static func callOpenAI(system: String, user: String, settings: Settings, apiKey: String) async throws -> String {
         do {
-            return try await openAIRequest(system: system, user: user, settings: settings, withEffort: true)
+            return try await openAIRequest(system: system, user: user, settings: settings, apiKey: apiKey, withEffort: true)
         } catch TranslatorError.http(400, let detail) {
             // Models that take no reasoning effort reject the whole request rather than
             // ignoring the field.
             guard detail.lowercased().contains("reasoning_effort") else {
                 throw TranslatorError.http(400, detail)
             }
-            return try await openAIRequest(system: system, user: user, settings: settings, withEffort: false)
+            return try await openAIRequest(system: system, user: user, settings: settings, apiKey: apiKey, withEffort: false)
         }
     }
 
-    private static func openAIRequest(system: String, user: String, settings: Settings,
+    private static func openAIRequest(system: String, user: String, settings: Settings, apiKey: String,
                                       withEffort: Bool) async throws -> String {
         var request = URLRequest(url: try endpoint(settings.baseURL, "/chat/completions"))
         request.httpMethod = "POST"
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(settings.usableAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         var body: [String: Any] = [
             "model": settings.model,
@@ -193,20 +199,20 @@ enum Translator {
 
     // MARK: - Anthropic Messages API
 
-    private static func callAnthropic(system: String, user: String, settings: Settings) async throws -> String {
+    private static func callAnthropic(system: String, user: String, settings: Settings, apiKey: String) async throws -> String {
         do {
-            return try await anthropicRequest(system: system, user: user, settings: settings, useFallbacks: true)
+            return try await anthropicRequest(system: system, user: user, settings: settings, apiKey: apiKey, useFallbacks: true)
         } catch TranslatorError.http(400, let detail) {
             // Endpoints that do not know the fallback beta reject the whole request. Retry plain.
             let lowered = detail.lowercased()
             guard lowered.contains("fallback") || lowered.contains("beta") || lowered.contains("output_config") else {
                 throw TranslatorError.http(400, detail)
             }
-            return try await anthropicRequest(system: system, user: user, settings: settings, useFallbacks: false)
+            return try await anthropicRequest(system: system, user: user, settings: settings, apiKey: apiKey, useFallbacks: false)
         }
     }
 
-    private static func anthropicRequest(system: String, user: String, settings: Settings,
+    private static func anthropicRequest(system: String, user: String, settings: Settings, apiKey: String,
                                          useFallbacks: Bool) async throws -> String {
         var request = URLRequest(url: try endpoint(settings.baseURL, "/messages"))
         request.httpMethod = "POST"
@@ -219,7 +225,7 @@ enum Translator {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             betas.append("oauth-2025-04-20")
         } else {
-            request.setValue(settings.usableAPIKey, forHTTPHeaderField: "x-api-key")
+            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         }
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
