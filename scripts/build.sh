@@ -11,6 +11,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+if [ ! -f "$ROOT/Resources/AppIcon.icns" ]; then
+  "$ROOT/scripts/make-icon.sh"
+fi
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
+
 echo "Compiling..."
 swiftc \
   -swift-version 5 \

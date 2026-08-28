@@ -83,6 +83,20 @@ final class Settings: ObservableObject {
     @Published var stylePrompt: String { didSet { defaults.set(stylePrompt, forKey: "stylePrompt") } }
     @Published var launchAtLoginEnabled: Bool { didSet { defaults.set(launchAtLoginEnabled, forKey: "launchAtLogin") } }
 
+    @Published var replaceHotkey: HotkeyBinding { didSet { Settings.store(replaceHotkey, forKey: "replaceHotkey") } }
+    @Published var peekHotkey: HotkeyBinding { didSet { Settings.store(peekHotkey, forKey: "peekHotkey") } }
+
+    private static func store(_ binding: HotkeyBinding, forKey key: String) {
+        guard let data = try? JSONEncoder().encode(binding) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    private static func loadBinding(_ key: String, default fallback: HotkeyBinding) -> HotkeyBinding {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let binding = try? JSONDecoder().decode(HotkeyBinding.self, from: data) else { return fallback }
+        return binding
+    }
+
     /// Stored in the login Keychain, never in UserDefaults.
     @Published var apiKey: String { didSet { Keychain.set(Settings.sanitize(apiKey), account: keychainAccount) } }
 
@@ -111,6 +125,8 @@ final class Settings: ObservableObject {
         peekLanguage = defaults.string(forKey: "peekLanguage") ?? "Korean"
         stylePrompt = defaults.string(forKey: "stylePrompt") ?? ""
         launchAtLoginEnabled = defaults.bool(forKey: "launchAtLogin")
+        replaceHotkey = Settings.loadBinding("replaceHotkey", default: .defaultReplace)
+        peekHotkey = Settings.loadBinding("peekHotkey", default: .defaultPeek)
         apiKey = Settings.sanitize(Keychain.get(account: "apiKey.\(p.rawValue)") ?? "")
     }
 

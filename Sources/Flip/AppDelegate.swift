@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -10,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var busy = false
 
     private let workQueue = DispatchQueue(label: "video.cutback.flip.work", qos: .userInitiated)
+    private var hotkeyObservers: [AnyCancellable] = []
 
     // MARK: - Lifecycle
 
@@ -17,14 +19,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         buildMainMenu()
         buildStatusItem()
 
-        HotkeyManager.shared.register(id: 1, combo: HotkeyManager.replaceCombo) { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in await self.run(mode: .replace) }
-        }
-        HotkeyManager.shared.register(id: 2, combo: HotkeyManager.peekCombo) { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in await self.run(mode: .peek) }
-        }
+        registerHotkeys()
+
+        // Rebinding in Settings takes effect immediately.
+        let settings = Settings.shared
+        hotkeyObservers = [
+            settings.$replaceHotkey.dropFirst().sink { [weak self] _ in
+                DispatchQueue.main.async { self?.registerHotkeys() }
+            },
+            settings.$peekHotkey.dropFirst().sink { [weak self] _ in
+                DispatchQueue.main.async { self?.registerHotkeys() }
+            }
+        ]
 
         // Launching the app a second time reaches Settings even when a menu bar manager
         // such as Ice has collapsed the status icon out of sight.
@@ -46,6 +52,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if !TextAccess.hasAccessibilityPermission() || Settings.shared.apiKey.isEmpty {
             openSettings()
         }
+    }
+
+    private func registerHotkeys() {
+        let settings = Settings.shared
+        HotkeyManager.shared.register(id: 1, binding: settings.replaceHotkey) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in await self.run(mode: .replace) }
+        }
+        HotkeyManager.shared.register(id: 2, binding: settings.peekHotkey) { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in await self.run(mode: .peek) }
+        }
+        StatusWriter.write()
+        statusItem?.menu = menu()
     }
 
     // MARK: - Main menu
@@ -121,13 +141,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                  action: #selector(menuReplace), keyEquivalent: "")
         replace.target = self
         menu.addItem(replace)
-        menu.addItem(shortcutHint(HotkeyManager.replaceCombo.display + "  replaces the text in place"))
+        menu.addItem(shortcutHint(settings.replaceHotkey.display + "  replaces the text in place"))
 
         let peek = NSMenuItem(title: "Show translation in \(settings.resolvedTarget(for: .peek).label)",
                               action: #selector(menuPeek), keyEquivalent: "")
         peek.target = self
         menu.addItem(peek)
-        menu.addItem(shortcutHint(HotkeyManager.peekCombo.display + "  opens a popup"))
+        menu.addItem(shortcutHint(settings.peekHotkey.display + "  opens a popup"))
 
         menu.addItem(.separator())
 
@@ -259,7 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if settingsWindow == nil {
             settingsWindow = makeWindow(title: "Flip Settings",
                                         view: AnyView(SettingsView()),
-                                        size: NSSize(width: 580, height: 740))
+                                        size: NSSize(width: 580, height: 830))
         }
         show(settingsWindow)
     }

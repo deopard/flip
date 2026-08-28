@@ -10,7 +10,7 @@ enum ScreenshotRenderer {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         try render(AnyView(SettingsView()),
-                   size: NSSize(width: 580, height: 740),
+                   size: NSSize(width: 580, height: 830),
                    to: directory.appendingPathComponent("settings.png"))
 
         try render(AnyView(HistoryView(store: HistoryStore(sample: sampleEntries()))),

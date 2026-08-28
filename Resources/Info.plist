@@ -8,6 +8,8 @@
     <string>Flip</string>
     <key>CFBundleExecutable</key>
     <string>Flip</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>video.cutback.flip</string>
     <key>CFBundlePackageType</key>

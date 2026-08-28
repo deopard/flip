@@ -105,7 +105,7 @@ struct HistoryView: View {
             Text(query.isEmpty ? "No translations yet" : "No match")
                 .font(.system(size: 13)).foregroundStyle(.secondary)
             if query.isEmpty {
-                Text("Select text anywhere, then press \(HotkeyManager.replaceCombo.display) or \(HotkeyManager.peekCombo.display).")
+                Text("Select text anywhere, then press \(Settings.shared.replaceHotkey.display) or \(Settings.shared.peekHotkey.display).")
                     .font(.system(size: 11)).foregroundStyle(.tertiary)
             }
             Spacer()

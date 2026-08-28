@@ -25,7 +25,7 @@ struct SettingsView: View {
             .padding(22)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 580, height: 740)
+        .frame(width: 580, height: 830)
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             accessibilityGranted = TextAccess.hasAccessibilityPermission()
         }
@@ -92,25 +92,24 @@ struct SettingsView: View {
                 }
                 GridRow {
                     label("Model")
-                    HStack(spacing: 6) {
-                        TextField("", text: $settings.model).textFieldStyle(.roundedBorder)
-                        Menu("Presets") {
-                            ForEach(settings.provider.suggestedModels, id: \.self) { name in
-                                Button(name) { settings.model = name }
-                            }
-                        }
-                        .frame(width: 92)
+                    HStack(spacing: 8) {
+                        ComboBoxField(text: $settings.model,
+                                      options: settings.provider.suggestedModels,
+                                      placeholder: "model id")
+                            .frame(width: 240, height: 24)
+                        Text("Pick one or type any model id.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
                     }
                 }
                 GridRow {
                     label("Effort")
                     HStack(spacing: 8) {
-                        Picker("", selection: $settings.effort) {
-                            ForEach(settings.provider.effortLevels, id: \.self) { Text($0).tag($0) }
-                        }
-                        .labelsHidden()
-                        .frame(width: 130)
-                        Text("How hard the model thinks. Lower is faster.")
+                        ComboBoxField(text: $settings.effort,
+                                      options: settings.provider.effortLevels,
+                                      placeholder: "effort")
+                            .frame(width: 240, height: 24)
+                        Text("How hard the model thinks.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
                     }
@@ -150,11 +149,11 @@ struct SettingsView: View {
         section("Languages", "Pick \"Auto swap\" in either row and Flip flips between the two languages below, based on what you selected.") {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 9) {
                 GridRow {
-                    label("Replace \u{2325}\u{2318}'")
+                    label("Replace \(settings.replaceHotkey.display)")
                     languagePicker($settings.replaceLanguage)
                 }
                 GridRow {
-                    label("Peek \u{2325}\u{2318};")
+                    label("Peek \(settings.peekHotkey.display)")
                     languagePicker($settings.peekLanguage)
                 }
             }
@@ -173,29 +172,30 @@ struct SettingsView: View {
     }
 
     private var shortcuts: some View {
-        section("Shortcuts", "Fixed in this version.") {
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 8) {
-                shortcutRow(HotkeyManager.replaceCombo,
+        section("Shortcuts", "Click a shortcut and press the keys you want. It must include command, option or control.") {
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 10) {
+                shortcutRow($settings.replaceHotkey, fallback: .defaultReplace,
                             "Translate the selection and replace it in place. With nothing selected, translates the whole text field.")
-                shortcutRow(HotkeyManager.peekCombo,
+                shortcutRow($settings.peekHotkey, fallback: .defaultPeek,
                             "Translate the selection and show it in a popup. Nothing on screen changes.")
             }
         }
     }
 
-    private func shortcutRow(_ combo: HotkeyManager.Combo, _ description: String) -> some View {
-        let registration = HotkeyManager.shared.registrations[combo.display]
+    private func shortcutRow(_ binding: Binding<HotkeyBinding>,
+                             fallback: HotkeyBinding,
+                             _ description: String) -> some View {
+        let registration = HotkeyManager.shared.registration(for: binding.wrappedValue)
         let broken = registration != nil && registration?.isOK == false
         return GridRow {
-            Text(combo.display)
-                .font(.system(size: 13, design: .monospaced))
+            HotkeyRecorder(binding: binding, fallback: fallback)
                 .gridColumnAlignment(.trailing)
             VStack(alignment: .leading, spacing: 2) {
                 Text(description)
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if broken, let registration {
-                    Label("This shortcut is \(registration.explanation). Another app on this Mac owns it, so nothing will happen when you press it.",
+                    Label("This shortcut is \(registration.explanation). Nothing will happen when you press it. Pick another one.",
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 11)).foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
