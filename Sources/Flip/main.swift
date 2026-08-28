@@ -68,12 +68,9 @@ if arguments.first == "--probe-focus" {
         let info = TextAccess.focusInfo()
         print("app       \(info.appName ?? "unknown")")
         print("focus     \(info.summary)")
-        if let decision = AutoMode.decideFromAccessibility() {
-            print("decision  \(decision.explanation)")
-        } else {
-            print("decision  the focused element reports no selection of its own;")
-            print("          the real shortcut would copy to find out where the selection is")
-        }
+        print("decision  \(AutoMode.focusOnlyDescription())")
+        print("          the shortcut also copies, to read the real text and to see whether")
+        print("          the selection is inside this element or somewhere else")
     }
     exit(0)
 }

@@ -1,23 +1,27 @@
 import AppKit
 
-/// Decides, for the single shortcut, whether to replace the text in place or show a popup.
+/// Decides, for the shortcut, whether to replace the text in place or show a popup.
 ///
-/// Keyboard focus alone is not enough. In Slack, Discord, Notion and most chat apps, focus stays
-/// in the composer while you select text in a message you are reading. Deciding on focus would
-/// paste a translation of the message you were reading into the box you were writing in.
+/// Two separate jobs, and Accessibility is only good at one of them.
 ///
-/// What actually separates the two cases is where the selection is. If the selection lives
-/// inside the focused editable element, replacing it is what the user meant. If the selection is
-/// anywhere else, or there is no editable focus at all, showing a popup is.
+/// **Where the selection is** is what separates the cases, and Accessibility answers it well.
+/// Keyboard focus does not: in Slack, Discord, Notion and most chat apps focus stays in the
+/// composer while you select text in a message you are reading, so a focus-based rule would
+/// paste a translation of what you were reading into the box you were writing in.
+///
+/// **What the selected text actually is** must come from the clipboard. Chromium, and therefore
+/// every Electron app, flattens its accessibility tree into a single line: `AXSelectedText`
+/// comes back with every line break gone and U+FFFC in place of each emoji and mention. A
+/// translation of that reads as one run-on paragraph. A synthetic copy returns the real text.
 enum AutoMode {
 
     enum Decision {
-        /// Text taken straight from the focused field; translate and paste over it.
-        case replaceSelection(String)
+        /// The selection sits inside the focused editable element; paste over it.
+        case replaceSelection
         /// A cursor sits in a field with content but nothing is selected; take the whole field.
         case replaceWholeField
-        /// Translate this and show it, changing nothing on screen.
-        case popup(String)
+        /// Translate and show, changing nothing on screen.
+        case popup
         case nothing
         /// A password field has focus. Refuse outright.
         case refuseSecure
@@ -40,54 +44,66 @@ enum AutoMode {
         }
     }
 
-    /// The part that needs no clipboard. Returns nil when the caller must fall back to a
-    /// synthetic copy to find out what is selected.
-    static func decideFromAccessibility() -> Decision? {
-        let focus = focusInfo()
+    /// Called once a synthetic copy has produced the real text. `copied` is nil when nothing
+    /// was selected anywhere.
+    static func decide(copied: String?) -> Decision {
+        let focus = TextAccess.focusInfo()
         if focus.isSecure { return .refuseSecure }
-        let selected = TextAccess.accessibilitySelectedText()
 
-        if let selected, !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // The focused element reported its own selection, so we know exactly where it is.
-            return focus.isEditable ? .replaceSelection(selected) : .popup(selected)
+        let selection = normalize(copied ?? "")
+
+        guard !selection.isEmpty else {
+            // Nothing selected. Only useful when a cursor sits in a field.
+            guard focus.isEditable else { return .nothing }
+            if let value = TextAccess.accessibilityFocusValue() {
+                return normalize(value).isEmpty ? .nothing : .replaceWholeField
+            }
+            return .replaceWholeField          // editable but its contents are not readable
         }
-        return nil
+
+        guard focus.isEditable else { return .popup }
+
+        // The field holds focus and something is selected. Decide whether that selection is
+        // inside it. Both signals are compared after normalising, because the accessibility
+        // strings and the clipboard disagree about whitespace and embedded objects.
+        if let axSelection = TextAccess.accessibilitySelectedText(),
+           !normalize(axSelection).isEmpty {
+            // The focused element claims the selection as its own.
+            return .replaceSelection
+        }
+        if let value = TextAccess.accessibilityFocusValue(), !normalize(value).isEmpty {
+            return normalize(value).contains(selection) ? .replaceSelection : .popup
+        }
+
+        // Nothing to compare against. Do not overwrite text on a guess.
+        return .popup
     }
 
-    /// Called once the clipboard has told us what is actually selected, wherever it lives.
-    ///
-    /// `copied` is nil when a synthetic copy produced nothing, which means nothing is selected.
-    static func decideAfterCopy(copied: String?) -> Decision {
-        let focus = focusInfo()
-        if focus.isSecure { return .refuseSecure }
-        let trimmed = copied?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard !trimmed.isEmpty else {
-            // Nothing selected anywhere. Only useful if a cursor is sitting in a field.
-            if focus.isEditable,
-               let value = TextAccess.accessibilityFocusValue(),
-               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return .replaceWholeField
-            }
-            if focus.isEditable && focus.isUnknown == false {
-                // Editable but we cannot read its contents; select-all and see.
-                return .replaceWholeField
-            }
-            return .nothing
-        }
-
-        guard focus.isEditable else { return .popup(copied!) }
-
-        // The field holds focus and something is selected, but the element did not report the
-        // selection as its own. If its full value contains what was copied, the selection is
-        // inside it after all; otherwise the user selected something elsewhere.
-        if let value = TextAccess.accessibilityFocusValue(), !value.isEmpty {
-            return value.contains(trimmed) ? .replaceSelection(copied!) : .popup(copied!)
-        }
-
-        // No value to compare against. Do not overwrite text on a guess.
-        return .popup(copied!)
+    /// Reports what would happen without touching the clipboard, for `--probe-focus`. The text
+    /// is not read here, so this cannot distinguish a selection inside the field from one
+    /// outside it; it reports the focus half only.
+    static func focusOnlyDescription() -> String {
+        let focus = TextAccess.focusInfo()
+        if focus.isSecure { return Decision.refuseSecure.explanation }
+        return focus.isEditable
+            ? "focus is editable, so a selection inside it would be replaced in place"
+            : "focus is not editable, so any selection would open the popup"
     }
 
-    private static func focusInfo() -> TextAccess.FocusInfo { TextAccess.focusInfo() }
+    /// U+FFFC stands in for an emoji or mention chip in an accessibility string and means
+    /// nothing to a translator. Whitespace differs between the two sources, so it is collapsed
+    /// for comparison only, never in the text that gets translated.
+    static func normalize(_ text: String) -> String {
+        let withoutObjects = text.replacingOccurrences(of: "\u{FFFC}", with: " ")
+        return withoutObjects
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Cleans a source string before it is translated: object placeholders removed, real line
+    /// breaks kept exactly as they were.
+    static func cleanForTranslation(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{FFFC}", with: "")
+    }
 }

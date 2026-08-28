@@ -26,9 +26,12 @@ Keyboard focus alone is not enough. In Slack, Discord, Notion and most chat apps
 
 What separates the two is where the selection is:
 
-1. If the focused element reports the selection as its own, that settles it: inside an editable element means replace, otherwise popup. No clipboard is touched.
-2. Otherwise Flip copies to find out what is selected, then checks whether the focused element's own contents contain it. If they do, the selection was inside the field after all. If not, the selection is elsewhere and it shows a popup.
-3. Where it cannot tell, it shows the popup. Nothing gets overwritten on a guess.
+1. Flip copies the selection, saving and restoring your clipboard around it.
+2. If the focused element is not something you can type into, it shows the popup.
+3. If it is, and it reports the selection as its own, or its contents contain what was copied, the selection was inside the field: replace.
+4. Where it cannot tell, it shows the popup. Nothing gets overwritten on a guess.
+
+The text itself always comes from the clipboard, never from Accessibility, even though Accessibility can hand back a selection directly. Chromium, and so every Electron app, flattens its accessibility tree into one line: `AXSelectedText` arrives with every line break gone and U+FFFC where each emoji and mention chip was. A translation of that reads as one run-on paragraph. Accessibility answers where the selection is; the clipboard answers what it says.
 
 A field the app marks as secure, such as a password box, is refused outright under every shortcut. Flip will neither read it nor paste over it.
 
@@ -151,6 +154,16 @@ Until then there are two ways to hand it to someone, both awkward for a non-engi
 
 - They clone the repository and run `./scripts/build.sh` themselves. A locally built app carries no quarantine flag, so it opens normally. It needs the Xcode Command Line Tools.
 - You send them the built app and they right-click it and choose Open the first time, or run `xattr -d com.apple.quarantine /Applications/Flip.app`. Some managed Macs block this outright.
+
+## Checking what Flip actually received
+
+Every translation is recorded with its source text exactly as it arrived, which is how to tell a bad translation from a bad read:
+
+```
+python3 -c "import json,pathlib;e=json.loads((pathlib.Path.home()/'Library/Application Support/Flip/history.json').read_text())[0];print(repr(e['source'][:300]))"
+```
+
+If the source has no line breaks in it, the problem is upstream of the model.
 
 ## How it is built
 

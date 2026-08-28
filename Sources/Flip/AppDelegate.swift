@@ -222,7 +222,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // --- work out what to do and what text to work on ---
-        var snapshot: TextAccess.ClipboardSnapshot?
+        // The selected text always comes from the clipboard, never from Accessibility.
+        // Electron apps flatten their accessibility strings: every line break disappears and
+        // emoji and mentions become U+FFFC. The clipboard returns what was really selected.
+        let saved = await offMain { TextAccess.snapshotClipboard() }
+        var snapshot: TextAccess.ClipboardSnapshot? = saved
         var source: String?
         var mode: Mode
 
@@ -230,57 +234,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case .peek:
             mode = .peek
             PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
-            source = await offMain { TextAccess.accessibilitySelectedText() }
-            if source == nil {
-                let saved = await offMain { TextAccess.snapshotClipboard() }
-                source = await offMain { TextAccess.copySelection(selectAllIfEmpty: false) }
-                await offMain { TextAccess.restoreClipboard(saved) }
-            }
+            source = await offMain { TextAccess.copySelection(selectAllIfEmpty: false) }
+            await offMain { TextAccess.restoreClipboard(saved) }
+            snapshot = nil
 
         case .replace:
             mode = .replace
             PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
-            let saved = await offMain { TextAccess.snapshotClipboard() }
             source = await offMain { TextAccess.copySelection(selectAllIfEmpty: true) }
-            snapshot = saved
 
         case .auto:
-            // Fast path: the focused element told us where the selection is, so nothing needs
-            // to touch the clipboard to find out.
-            if let decision = await offMain({ AutoMode.decideFromAccessibility() }) {
-                mode = decision.mode
-                if case .replaceSelection(let text) = decision {
-                    source = text
-                    snapshot = await offMain { TextAccess.snapshotClipboard() }
-                } else if case .popup(let text) = decision {
-                    source = text
-                }
-            } else {
-                let saved = await offMain { TextAccess.snapshotClipboard() }
-                let copied = await offMain { TextAccess.copySelection(selectAllIfEmpty: false) }
-                let decision = await offMain { AutoMode.decideAfterCopy(copied: copied) }
-                mode = decision.mode
-                switch decision {
-                case .replaceSelection(let text):
-                    source = text
-                    snapshot = saved
-                case .replaceWholeField:
-                    source = await offMain { TextAccess.copySelection(selectAllIfEmpty: true) }
-                    snapshot = saved
-                case .popup(let text):
-                    source = text
-                    await offMain { TextAccess.restoreClipboard(saved) }
-                case .nothing, .refuseSecure:
-                    source = nil
-                    await offMain { TextAccess.restoreClipboard(saved) }
-                }
+            let copied = await offMain { TextAccess.copySelection(selectAllIfEmpty: false) }
+            let decision = await offMain { AutoMode.decide(copied: copied) }
+            mode = decision.mode
+            switch decision {
+            case .replaceSelection:
+                source = copied
+            case .replaceWholeField:
+                source = await offMain { TextAccess.copySelection(selectAllIfEmpty: true) }
+            case .popup:
+                source = copied
+                await offMain { TextAccess.restoreClipboard(saved) }
+                snapshot = nil
+            case .nothing:
+                source = nil
+                await offMain { TextAccess.restoreClipboard(saved) }
+                snapshot = nil
+            case .refuseSecure:
+                await offMain { TextAccess.restoreClipboard(saved) }
+                PopupPanel.shared.showToast(
+                    "That is a password field. Flip will not read it or paste over it.", isError: true)
+                return
             }
             PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
         }
 
         let target = settings.resolvedTarget(for: mode)
 
-        guard let text = source,
+        let cleaned = source.map(AutoMode.cleanForTranslation)
+        guard let text = cleaned,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             if let snapshot { await offMain { TextAccess.restoreClipboard(snapshot) } }
             PopupPanel.shared.showToast(TranslatorError.emptyInput.localizedDescription, isError: true)
