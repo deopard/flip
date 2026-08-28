@@ -3,7 +3,12 @@
 #
 # Differences from scripts/build.sh, which builds for this machine:
 #  - universal, so it runs on Apple Silicon and Intel
-#  - signed ad hoc rather than with the local development certificate, which nobody else has
+#
+# It signs with the project certificate from scripts/create-signing-identity.sh. That is not
+# cosmetic: an ad-hoc signature's identity is the binary's own hash, so every release would be a
+# different app to macOS and nobody's Accessibility permission would survive an update. A fixed
+# certificate keeps the identity stable across versions. The certificate travels inside the
+# signature, so people installing this need nothing.
 #
 # The result is still not notarized: see the README, "Giving it to other people". Anyone who
 # downloads it has to clear the quarantine flag once.
@@ -40,9 +45,20 @@ lipo -create -output "$APP/Contents/MacOS/Flip" "$BUILD/arch/Flip-arm64" "$BUILD
 rm -rf "$BUILD/arch"
 lipo -info "$APP/Contents/MacOS/Flip"
 
-echo "Signing ad hoc..."
-codesign --force --deep --sign - "$APP"
+IDENTITY_FILE="$ROOT/scripts/.signing-identity"
+if [ -f "$IDENTITY_FILE" ]; then
+  echo "Signing with the project certificate..."
+  codesign --force --deep --sign "$(cat "$IDENTITY_FILE")" "$APP"
+else
+  echo "WARNING: no project certificate, signing ad hoc." >&2
+  echo "         Everyone who installs this will have to grant Accessibility again," >&2
+  echo "         because an ad-hoc signature's identity is the binary's hash." >&2
+  echo "         Run ./scripts/create-signing-identity.sh first." >&2
+  codesign --force --deep --sign - "$APP"
+fi
 codesign --verify --strict "$APP" && echo "signature verifies"
+echo "identity macOS will remember:"
+codesign -d -r- "$APP" 2>&1 | tail -1 | sed 's/^/  /'
 
 echo "Archiving..."
 # ditto, not zip: it preserves the signature and the bundle's extended attributes.

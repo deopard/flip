@@ -74,11 +74,14 @@ If your Mac is managed by an employer, both routes may be blocked. Building from
 ### Or build it
 
 ```
+./scripts/create-signing-identity.sh   # optional, see below
 ./scripts/build.sh
 open build/Flip.app
 ```
 
 The build needs no dependencies and no Xcode project. It uses the Swift compiler that ships with the Xcode Command Line Tools.
+
+`create-signing-identity.sh` makes a self-signed certificate in its own keychain and signs every build with it. Without it, builds are signed ad hoc, and because an ad-hoc signature's identity is the binary's own hash, macOS treats each rebuild as a new app: it drops the Accessibility permission and re-asks for your Keychain password every time. It takes no password to set up and `--remove` undoes it.
 
 To keep it around, and to be able to launch it from Spotlight:
 
@@ -180,7 +183,9 @@ This project has no Developer ID certificate, so that is a purchase and setup st
 
 Until then, released builds are signed ad hoc and carry the quarantine flag once downloaded, which is why the install instructions above clear it by hand.
 
-Ad-hoc signing has a second cost worth knowing about. The signature's identity is the binary's own hash, so every release is a different app as far as macOS is concerned, and the Accessibility permission you granted does not carry over to the next version. Worse, the old entry stays in the list looking switched on while the new build has no permission at all. If a new version says it needs Accessibility access while the switch is already on, remove the Flip row with the minus button and grant it again, or run `tccutil reset Accessibility video.cutback.flip`. A Developer ID certificate would fix this too, since the identity would then be the certificate rather than the hash. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
+Releases are signed with a self-signed certificate rather than ad hoc, which is a different thing from notarization and solves a different problem. macOS identifies a signed app by its designated requirement. Ad hoc makes that the binary's own hash, so every release would be a different app, and the Accessibility permission you granted would not survive an update, while the old entry stayed in the list looking switched on. With a fixed certificate the requirement is `identifier "video.cutback.flip" and certificate leaf = H"..."`, which does not change between versions. The certificate travels inside the signature, so installing a release needs nothing extra.
+
+Versions up to and including 0.1.0 were signed ad hoc. Moving from one of those to 0.1.1 needs the permission granted once more; after that it carries over. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
 
 `scripts/release.sh` produces what the releases page carries: a universal binary for Apple Silicon and Intel, ad-hoc signed, archived with `ditto` so the signature survives.
 
