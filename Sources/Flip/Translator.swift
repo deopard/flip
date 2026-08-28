@@ -144,19 +144,36 @@ enum Translator {
     // MARK: - OpenAI and OpenAI-compatible
 
     private static func callOpenAI(system: String, user: String, settings: Settings) async throws -> String {
+        do {
+            return try await openAIRequest(system: system, user: user, settings: settings, withEffort: true)
+        } catch TranslatorError.http(400, let detail) {
+            // Models that take no reasoning effort reject the whole request rather than
+            // ignoring the field.
+            guard detail.lowercased().contains("reasoning_effort") else {
+                throw TranslatorError.http(400, detail)
+            }
+            return try await openAIRequest(system: system, user: user, settings: settings, withEffort: false)
+        }
+    }
+
+    private static func openAIRequest(system: String, user: String, settings: Settings,
+                                      withEffort: Bool) async throws -> String {
         var request = URLRequest(url: try endpoint(settings.baseURL, "/chat/completions"))
         request.httpMethod = "POST"
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(settings.usableAPIKey)", forHTTPHeaderField: "Authorization")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": settings.model,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": user]
             ]
         ]
+        if withEffort, settings.effort != Settings.effortUnset {
+            body["reasoning_effort"] = settings.effort
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let json = try await send(request)
@@ -202,9 +219,11 @@ enum Translator {
             "system": system,
             "messages": [["role": "user", "content": user]]
         ]
+        if settings.effort != Settings.effortUnset {
+            // Lower effort keeps a keystroke-latency tool fast while leaving thinking on.
+            body["output_config"] = ["effort": settings.effort]
+        }
         if useFallbacks {
-            // Effort low keeps a keystroke-latency tool fast while leaving adaptive thinking on.
-            body["output_config"] = ["effort": "low"]
             // Server-side fallbacks: if a safety classifier declines the text, Anthropic reroutes
             // by refusal category instead of handing back an unusable response.
             body["fallbacks"] = "default"

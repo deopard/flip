@@ -23,9 +23,18 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// Reasoning effort. Both providers take one, under different names, and both reject
+    /// values a given model does not support, so this is a plain list plus an opt out.
+    var effortLevels: [String] {
+        switch self {
+        case .openai: return [Settings.effortUnset, "minimal", "low", "medium", "high"]
+        case .anthropic: return [Settings.effortUnset, "low", "medium", "high", "xhigh", "max"]
+        }
+    }
+
     var suggestedModels: [String] {
         switch self {
-        case .openai: return ["luna-med", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+        case .openai: return ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5"]
         case .anthropic: return ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]
         }
     }
@@ -63,6 +72,8 @@ final class Settings: ObservableObject {
     @Published var provider: Provider { didSet { defaults.set(provider.rawValue, forKey: "provider") } }
     @Published var baseURL: String { didSet { defaults.set(baseURL, forKey: "baseURL") } }
     @Published var model: String { didSet { defaults.set(model, forKey: "model") } }
+    /// Sent as `reasoning_effort` to OpenAI and as `output_config.effort` to Anthropic.
+    @Published var effort: String { didSet { defaults.set(effort, forKey: "effort") } }
 
     /// Target language for the replace shortcut (option+command+apostrophe).
     @Published var replaceLanguage: String { didSet { defaults.set(replaceLanguage, forKey: "replaceLanguage") } }
@@ -74,6 +85,8 @@ final class Settings: ObservableObject {
 
     /// Stored in the login Keychain, never in UserDefaults.
     @Published var apiKey: String { didSet { Keychain.set(Settings.sanitize(apiKey), account: keychainAccount) } }
+
+    static let effortUnset = "Not set"
 
     private var keychainAccount: String { "apiKey.\(provider.rawValue)" }
 
@@ -92,7 +105,8 @@ final class Settings: ObservableObject {
         let p = Provider(rawValue: defaults.string(forKey: "provider") ?? "") ?? .openai
         provider = p
         baseURL = defaults.string(forKey: "baseURL") ?? p.defaultBaseURL
-        model = defaults.string(forKey: "model") ?? "luna-med"
+        model = defaults.string(forKey: "model") ?? "gpt-5.6-luna"
+        effort = defaults.string(forKey: "effort") ?? "medium"
         replaceLanguage = defaults.string(forKey: "replaceLanguage") ?? "English"
         peekLanguage = defaults.string(forKey: "peekLanguage") ?? "Korean"
         stylePrompt = defaults.string(forKey: "stylePrompt") ?? ""
@@ -107,6 +121,9 @@ final class Settings: ObservableObject {
         apiKey = Settings.sanitize(Keychain.get(account: "apiKey.\(newProvider.rawValue)") ?? "")
         if !newProvider.suggestedModels.contains(model) {
             model = newProvider.suggestedModels[0]
+        }
+        if !newProvider.effortLevels.contains(effort) {
+            effort = Settings.effortUnset
         }
     }
 

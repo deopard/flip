@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        buildMainMenu()
         buildStatusItem()
 
         HotkeyManager.shared.register(id: 1, combo: HotkeyManager.replaceCombo) { [weak self] in
@@ -45,6 +46,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if !TextAccess.hasAccessibilityPermission() || Settings.shared.apiKey.isEmpty {
             openSettings()
         }
+    }
+
+    // MARK: - Main menu
+
+    /// A menu bar app has no main menu by default, and macOS routes the standard editing
+    /// shortcuts through it. Without an Edit menu, command+V does nothing in the API key
+    /// field even though right click, paste works, because that uses the field's own
+    /// context menu. These items carry no code: the responder chain handles the selectors.
+    private func buildMainMenu() {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Settings...", action: #selector(openSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(withTitle: "History...", action: #selector(openHistory), keyEquivalent: "y").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Flip", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit Flip", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        let pasteMatch = NSMenuItem(title: "Paste and Match Style",
+                                    action: #selector(NSTextView.pasteAsPlainText(_:)), keyEquivalent: "V")
+        pasteMatch.keyEquivalentModifierMask = [.command, .option, .shift]
+        editMenu.addItem(pasteMatch)
+        editMenu.addItem(withTitle: "Delete", action: #selector(NSText.delete(_:)), keyEquivalent: "")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        main.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowItem.submenu = windowMenu
+        main.addItem(windowItem)
+        NSApp.windowsMenu = windowMenu
+
+        NSApp.mainMenu = main
     }
 
     // MARK: - Menu bar

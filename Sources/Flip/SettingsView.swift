@@ -103,6 +103,19 @@ struct SettingsView: View {
                     }
                 }
                 GridRow {
+                    label("Effort")
+                    HStack(spacing: 8) {
+                        Picker("", selection: $settings.effort) {
+                            ForEach(settings.provider.effortLevels, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 130)
+                        Text("How hard the model thinks. Lower is faster.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                }
+                GridRow {
                     Color.clear.frame(width: 1, height: 1)
                     HStack(spacing: 9) {
                         Button("Test connection") { runTest() }

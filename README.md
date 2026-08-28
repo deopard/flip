@@ -50,7 +50,8 @@ It puts a self-signed certificate called "Flip Dev" in your login Keychain and s
 
 - **Provider** — OpenAI (or anything that speaks the OpenAI chat completions format) or Anthropic.
 - **Base URL** — prefilled per provider; change it to point at a compatible gateway.
-- **Model** — free text, with presets per provider. Default is `luna-med`.
+- **Model** — free text, with presets per provider. Default is `gpt-5.6-luna`.
+- **Effort** — how hard the model thinks. Sent as `reasoning_effort` to OpenAI and as `output_config.effort` to Anthropic. Default `medium`. If a model does not accept one, Flip retries without it rather than failing.
 - **Replace shortcut translates into** — default English.
 - **Peek shortcut translates into** — default Korean.
 - **Auto swap** — pick this in either list and the app flips between your two configured languages based on what you selected.
