@@ -23,13 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Rebinding in Settings takes effect immediately.
         let settings = Settings.shared
+        let reregister: (Any) -> Void = { [weak self] _ in
+            DispatchQueue.main.async { self?.registerHotkeys() }
+        }
         hotkeyObservers = [
-            settings.$replaceHotkey.dropFirst().sink { [weak self] _ in
-                DispatchQueue.main.async { self?.registerHotkeys() }
-            },
-            settings.$peekHotkey.dropFirst().sink { [weak self] _ in
-                DispatchQueue.main.async { self?.registerHotkeys() }
-            }
+            settings.$replaceHotkey.dropFirst().sink(receiveValue: reregister),
+            settings.$peekHotkey.dropFirst().sink(receiveValue: reregister),
+            settings.$autoHotkey.dropFirst().sink(receiveValue: reregister),
+            settings.$shortcutMode.dropFirst().sink(receiveValue: reregister)
         ]
 
         // Launching the app a second time reaches Settings even when a menu bar manager
@@ -66,13 +67,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func registerHotkeys() {
         let settings = Settings.shared
-        HotkeyManager.shared.register(id: 1, binding: settings.replaceHotkey) { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in await self.run(mode: .replace) }
-        }
-        HotkeyManager.shared.register(id: 2, binding: settings.peekHotkey) { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in await self.run(mode: .peek) }
+        HotkeyManager.shared.unregisterAll()
+        if settings.shortcutMode == .automatic {
+            HotkeyManager.shared.register(id: 3, binding: settings.autoHotkey) { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in await self.run(trigger: .auto) }
+            }
+        } else {
+            HotkeyManager.shared.register(id: 1, binding: settings.replaceHotkey) { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in await self.run(trigger: .replace) }
+            }
+            HotkeyManager.shared.register(id: 2, binding: settings.peekHotkey) { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in await self.run(trigger: .peek) }
+            }
         }
         StatusWriter.write()
         statusItem?.menu = menu()
@@ -151,13 +160,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                  action: #selector(menuReplace), keyEquivalent: "")
         replace.target = self
         menu.addItem(replace)
-        menu.addItem(shortcutHint(settings.replaceHotkey.display + "  replaces the text in place"))
+        menu.addItem(shortcutHint(settings.shortcutMode == .automatic
+                                  ? settings.autoHotkey.display + "  replaces the text when you are in a field"
+                                  : settings.replaceHotkey.display + "  replaces the text in place"))
 
         let peek = NSMenuItem(title: "Show translation in \(settings.resolvedTarget(for: .peek).label)",
                               action: #selector(menuPeek), keyEquivalent: "")
         peek.target = self
         menu.addItem(peek)
-        menu.addItem(shortcutHint(settings.peekHotkey.display + "  opens a popup"))
+        menu.addItem(shortcutHint(settings.shortcutMode == .automatic
+                                  ? settings.autoHotkey.display + "  opens a popup when you are not"
+                                  : settings.peekHotkey.display + "  opens a popup"))
 
         menu.addItem(.separator())
 
@@ -193,12 +206,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return item
     }
 
-    @objc private func menuReplace() { Task { @MainActor in await run(mode: .replace) } }
-    @objc private func menuPeek() { Task { @MainActor in await run(mode: .peek) } }
+    @objc private func menuReplace() { Task { @MainActor in await run(trigger: .replace) } }
+    @objc private func menuPeek() { Task { @MainActor in await run(trigger: .peek) } }
 
     // MARK: - The two pipelines
 
-    private func run(mode: Mode) async {
+    enum Trigger { case replace, peek, auto }
+
+    private func run(trigger: Trigger) async {
         guard !busy else { return }
 
         guard TextAccess.hasAccessibilityPermission() else {
@@ -213,26 +228,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         defer { busy = false; setBusyIcon(false) }
 
         let settings = Settings.shared
-        let target = settings.resolvedTarget(for: mode)
         let appName = TextAccess.frontmostAppName()
-        PopupPanel.shared.showWorking("Translating into \(target.label)")
 
-        // --- read the selection ---
+        // Never read or overwrite a password field, whichever shortcut was pressed.
+        if await offMain({ TextAccess.focusInfo().isSecure }) {
+            PopupPanel.shared.showToast(
+                "That is a password field. Flip will not read it or paste over it.", isError: true)
+            return
+        }
+
+        // --- work out what to do and what text to work on ---
         var snapshot: TextAccess.ClipboardSnapshot?
         var source: String?
+        var mode: Mode
 
-        if mode == .peek {
+        switch trigger {
+        case .peek:
+            mode = .peek
+            PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
             source = await offMain { TextAccess.accessibilitySelectedText() }
-        }
-        if source == nil {
-            let saved = await offMain { TextAccess.snapshotClipboard() }
-            source = await offMain { TextAccess.copySelection(selectAllIfEmpty: mode == .replace) }
-            if mode == .replace {
-                snapshot = saved                      // give it back after we paste
-            } else {
+            if source == nil {
+                let saved = await offMain { TextAccess.snapshotClipboard() }
+                source = await offMain { TextAccess.copySelection(selectAllIfEmpty: false) }
                 await offMain { TextAccess.restoreClipboard(saved) }
             }
+
+        case .replace:
+            mode = .replace
+            PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
+            let saved = await offMain { TextAccess.snapshotClipboard() }
+            source = await offMain { TextAccess.copySelection(selectAllIfEmpty: true) }
+            snapshot = saved
+
+        case .auto:
+            // Fast path: the focused element told us where the selection is, so nothing needs
+            // to touch the clipboard to find out.
+            if let decision = await offMain({ AutoMode.decideFromAccessibility() }) {
+                mode = decision.mode
+                if case .replaceSelection(let text) = decision {
+                    source = text
+                    snapshot = await offMain { TextAccess.snapshotClipboard() }
+                } else if case .popup(let text) = decision {
+                    source = text
+                }
+            } else {
+                let saved = await offMain { TextAccess.snapshotClipboard() }
+                let copied = await offMain { TextAccess.copySelection(selectAllIfEmpty: false) }
+                let decision = await offMain { AutoMode.decideAfterCopy(copied: copied) }
+                mode = decision.mode
+                switch decision {
+                case .replaceSelection(let text):
+                    source = text
+                    snapshot = saved
+                case .replaceWholeField:
+                    source = await offMain { TextAccess.copySelection(selectAllIfEmpty: true) }
+                    snapshot = saved
+                case .popup(let text):
+                    source = text
+                    await offMain { TextAccess.restoreClipboard(saved) }
+                case .nothing, .refuseSecure:
+                    source = nil
+                    await offMain { TextAccess.restoreClipboard(saved) }
+                }
+            }
+            PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
         }
+
+        let target = settings.resolvedTarget(for: mode)
 
         guard let text = source,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

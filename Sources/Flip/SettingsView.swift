@@ -173,11 +173,11 @@ struct SettingsView: View {
         section("Languages", "Pick \"Auto swap\" in either row and Flip flips between the two languages below, based on what you selected.") {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 9) {
                 GridRow {
-                    label("Replace \(settings.replaceHotkey.display)")
+                    label(settings.shortcutMode == .automatic ? "Replace with" : "Replace \(settings.replaceHotkey.display)")
                     languagePicker($settings.replaceLanguage)
                 }
                 GridRow {
-                    label("Peek \(settings.peekHotkey.display)")
+                    label(settings.shortcutMode == .automatic ? "Popup shows" : "Peek \(settings.peekHotkey.display)")
                     languagePicker($settings.peekLanguage)
                 }
             }
@@ -197,12 +197,24 @@ struct SettingsView: View {
 
     private var shortcuts: some View {
         section("Shortcuts", "Click a shortcut and press the keys you want. It must include command, option or control.") {
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 10) {
-                shortcutRow($settings.replaceHotkey, fallback: .defaultReplace,
-                            "Translate the selection and replace it in place. With nothing selected, translates the whole text field.")
-                shortcutRow($settings.peekHotkey, fallback: .defaultPeek,
-                            "Translate the selection and show it in a popup. Nothing on screen changes.")
+            Picker("", selection: $settings.shortcutMode) {
+                ForEach(ShortcutMode.allCases) { Text($0.displayName).tag($0) }
             }
+            .labelsHidden()
+            .pickerStyle(.radioGroup)
+
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 10) {
+                if settings.shortcutMode == .automatic {
+                    shortcutRow($settings.autoHotkey, fallback: .defaultAuto,
+                                "Replaces the text when the selection is inside a field you can type in. Shows a popup otherwise. Where it cannot tell, it shows the popup rather than overwriting anything.")
+                } else {
+                    shortcutRow($settings.replaceHotkey, fallback: .defaultReplace,
+                                "Translate the selection and replace it in place. With nothing selected, translates the whole text field.")
+                    shortcutRow($settings.peekHotkey, fallback: .defaultPeek,
+                                "Translate the selection and show it in a popup. Nothing on screen changes.")
+                }
+            }
+            .padding(.top, 2)
         }
     }
 

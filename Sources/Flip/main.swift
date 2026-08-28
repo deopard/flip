@@ -55,6 +55,29 @@ if arguments.first == "--popup-demo" {
     exit(0)
 }
 
+// Reports what the Accessibility API says about whatever has keyboard focus, after a delay
+// long enough to click into the app you want to inspect. Used to check whether the one-shortcut
+// mode will pick replace or popup in a given app.
+//   Flip --probe-focus [seconds]
+if arguments.first == "--probe-focus" {
+    let delay = Double(arguments.count > 1 ? arguments[1] : "5") ?? 5
+    FileHandle.standardError.write(Data("Click into the field you want to inspect. Probing in \(Int(delay))s...\n".utf8))
+    Thread.sleep(forTimeInterval: delay)
+    MainActor.assumeIsolated {
+        _ = NSApplication.shared
+        let info = TextAccess.focusInfo()
+        print("app       \(info.appName ?? "unknown")")
+        print("focus     \(info.summary)")
+        if let decision = AutoMode.decideFromAccessibility() {
+            print("decision  \(decision.explanation)")
+        } else {
+            print("decision  the focused element reports no selection of its own;")
+            print("          the real shortcut would copy to find out where the selection is")
+        }
+    }
+    exit(0)
+}
+
 // Prints every precondition the shortcuts depend on.
 //   Flip --doctor
 if arguments.first == "--doctor" {

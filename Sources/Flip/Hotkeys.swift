@@ -18,6 +18,12 @@ struct HotkeyBinding: Codable, Equatable {
         return out + keyLabel
     }
 
+    /// The single shortcut. Same keys as the replace shortcut it supersedes, so the habit
+    /// carries over.
+    static let defaultAuto = HotkeyBinding(keyCode: UInt32(kVK_ANSI_Quote),
+                                           carbonModifiers: UInt32(optionKey | cmdKey),
+                                           keyLabel: "'")
+
     static let defaultReplace = HotkeyBinding(keyCode: UInt32(kVK_ANSI_Quote),
                                               carbonModifiers: UInt32(optionKey | cmdKey),
                                               keyLabel: "'")
@@ -141,6 +147,13 @@ final class HotkeyManager {
         }
         registrations[binding.display] = outcome
         return outcome
+    }
+
+    func unregisterAll() {
+        for (_, ref) in refs { if let ref { UnregisterEventHotKey(ref) } }
+        refs.removeAll()
+        registrations.removeAll()
+        bindings.removeAll()
     }
 
     func registration(for binding: HotkeyBinding) -> Registration? {

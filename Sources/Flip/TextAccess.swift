@@ -40,6 +40,107 @@ enum TextAccess {
         return (element as! AXUIElement)
     }
 
+    // MARK: - What has focus
+
+    /// What the Accessibility API says about whatever currently has keyboard focus.
+    struct FocusInfo {
+        var role: String?
+        var subrole: String?
+        var valueIsSettable: Bool
+        var hasSelectedTextRange: Bool
+        var appName: String?
+
+        /// Roles that are text you can type into. `AXComboBox` and `AXSearchField` count;
+        /// `AXStaticText` and `AXWebArea` do not.
+        static let editableRoles: Set<String> = [
+            "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"
+        ]
+
+        /// Roles that are never somewhere to paste into, whatever else they claim. Browsers in
+        /// particular hand back an `AXButton` that reports a selected text range while you are
+        /// simply reading a page, so a selection range on its own means nothing.
+        static let neverEditableRoles: Set<String> = [
+            "AXButton", "AXStaticText", "AXWebArea", "AXGroup", "AXLink", "AXImage",
+            "AXMenuItem", "AXMenuBarItem", "AXCell", "AXRow", "AXList", "AXTable",
+            "AXOutline", "AXScrollArea", "AXToolbar", "AXTabGroup", "AXCheckBox",
+            "AXRadioButton", "AXSlider", "AXProgressIndicator", "AXSplitGroup", "AXWindow"
+        ]
+
+        /// Whether replacing the text in place is safe here.
+        ///
+        /// The role decides first, because an app that names its element a text field means it.
+        /// Settability is the fallback for custom roles: it is the API asking the app directly
+        /// whether its value can be written. A selected text range is reported by too many
+        /// non-text elements to be evidence of anything, so it is diagnostic only.
+        var isEditable: Bool {
+            if let role, FocusInfo.editableRoles.contains(role) { return true }
+            if let role, FocusInfo.neverEditableRoles.contains(role) { return false }
+            return valueIsSettable
+        }
+
+        /// A password field, or any field the app has marked as secure. Flip must not read
+        /// these: the text would be sent to a translation API, and pasting over it would
+        /// destroy a credential the user cannot see to retype.
+        var isSecure: Bool {
+            if subrole == "AXSecureTextField" { return true }
+            if role == "AXSecureTextField" { return true }
+            return false
+        }
+
+        /// True when Accessibility told us nothing at all, so `isEditable` is a guess rather
+        /// than an answer.
+        var isUnknown: Bool {
+            role == nil && !valueIsSettable && !hasSelectedTextRange
+        }
+
+        var summary: String {
+            guard !isUnknown else { return "nothing focused, or the app exposes no accessibility information" }
+            if isSecure { return "secure text field, Flip will not touch it" }
+            var parts: [String] = []
+            parts.append("role=\(role ?? "none")")
+            if let subrole { parts.append("subrole=\(subrole)") }
+            parts.append("valueSettable=\(valueIsSettable)")
+            parts.append("selectionRange=\(hasSelectedTextRange)")
+            parts.append("-> \(isEditable ? "editable, would replace in place" : "not editable, would show the popup")")
+            return parts.joined(separator: "  ")
+        }
+    }
+
+    static func focusInfo() -> FocusInfo {
+        let appName = frontmostAppName()
+        guard let element = focusedElement() else {
+            return FocusInfo(role: nil, subrole: nil, valueIsSettable: false,
+                             hasSelectedTextRange: false, appName: appName)
+        }
+
+        func string(_ attribute: String) -> String? {
+            var value: AnyObject?
+            guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+            return value as? String
+        }
+
+        var settable: DarwinBoolean = false
+        AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable)
+
+        var range: AnyObject?
+        let hasRange = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &range) == .success
+
+        return FocusInfo(role: string(kAXRoleAttribute as String),
+                         subrole: string(kAXSubroleAttribute as String),
+                         valueIsSettable: settable.boolValue,
+                         hasSelectedTextRange: hasRange,
+                         appName: appName)
+    }
+
+    /// Full text of the focused element, used to tell "the selection is inside this field"
+    /// from "the selection is somewhere else while this field happens to hold focus".
+    static func accessibilityFocusValue() -> String? {
+        guard let element = focusedElement() else { return nil }
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success else { return nil }
+        return value as? String
+    }
+
     static func accessibilitySelectedText() -> String? {
         guard let element = focusedElement() else { return nil }
         var value: AnyObject?

@@ -11,14 +11,34 @@ git clone <this repo> && cd flip
 open build/Flip.app
 ```
 
-Two shortcuts, two behaviours:
+One shortcut, `⌥⌘'` (option command apostrophe). It decides what you meant:
 
-| Shortcut | What happens |
-|---|---|
-| `⌥⌘'` (option command apostrophe) | Translates your selection and **replaces it in place**. If nothing is selected, it translates the whole text field you are in. |
-| `⌥⌘;` (option command semicolon) | Translates your selection and **shows it in a popup**. Nothing on screen is changed. |
+- The selection is inside something you can type into: it **replaces the text in place**. With a cursor in a field and nothing selected, it takes the whole field.
+- Anything else: it **shows the translation in a popup** and changes nothing on screen.
 
-The intended loop: write a Slack message in Korean, select it, press `⌥⌘'`, and the box now holds the English version. Read an English message, select it, press `⌥⌘;`, and a floating panel shows the Korean.
+Write a Slack message in Korean, select it, press the shortcut, and the box now holds the English. Select a message you are reading, press the same shortcut, and a panel shows the Korean.
+
+You can switch to two separate shortcuts in Settings if you would rather say which one you mean.
+
+### How it decides
+
+Keyboard focus alone is not enough. In Slack, Discord, Notion and most chat apps, focus stays in the composer while you select text in a message you are reading, so deciding on focus would paste a translation of what you were reading into the box you were writing in.
+
+What separates the two is where the selection is:
+
+1. If the focused element reports the selection as its own, that settles it: inside an editable element means replace, otherwise popup. No clipboard is touched.
+2. Otherwise Flip copies to find out what is selected, then checks whether the focused element's own contents contain it. If they do, the selection was inside the field after all. If not, the selection is elsewhere and it shows a popup.
+3. Where it cannot tell, it shows the popup. Nothing gets overwritten on a guess.
+
+A field the app marks as secure, such as a password box, is refused outright under every shortcut. Flip will neither read it nor paste over it.
+
+Check what it will do in any app with `--probe-focus`, which reports the focused element's role, whether its value can be written, and the decision that follows:
+
+```
+/Applications/Flip.app/Contents/MacOS/Flip --probe-focus 5
+```
+
+Measured with it: Slack's composer is an `AXTextArea` with a settable value, Notes is the same, a browser reading a page hands back an `AXButton` whose value cannot be written. Browsers also report a selected text range on elements that are plainly not text, which is why a selection range on its own counts for nothing.
 
 ## Install
 
