@@ -94,7 +94,7 @@ build/Flip.app/Contents/MacOS/Flip --set-key
 
 It prompts, reads one line from standard input so the key never reaches your shell history or the process list, and writes it to the login Keychain. An empty line clears the stored key.
 
-Launching the app while it is already running also opens Settings, which is the other way past a hidden icon.
+Launching Flip always opens Settings, whether it is running or not. It has no window of its own to return to, so that is the only useful thing a launch can do, and it is the way past a hidden menu bar icon: search for Flip in Spotlight and press return.
 
 ## Checking it without the interface
 

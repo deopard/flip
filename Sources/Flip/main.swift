@@ -4,6 +4,7 @@ import Foundation
 nonisolated(unsafe) var flipDelegate: AppDelegate?
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+nonisolated(unsafe) let flipArguments = arguments
 
 // Stores the API key without needing the menu bar icon. Reads from stdin so the key
 // never lands in shell history or in the process list.

@@ -48,10 +48,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             TextAccess.requestAccessibilityPermission()
         }
 
-        // Nothing works without a key, and the icon may be hidden, so say so up front.
-        if !TextAccess.hasAccessibilityPermission() || Settings.shared.apiKey.isEmpty {
+        // Launching Flip is a deliberate act: it has no window of its own to return to, and a
+        // menu bar manager may be hiding its icon, so opening Settings is the only thing a
+        // launch can usefully do. (If this ever becomes a login item, that launch should pass
+        // --background and skip this.)
+        if !flipArguments.contains("--background") {
             openSettings()
         }
+    }
+
+    /// Fires when the app is launched or clicked while already running, which is what Spotlight,
+    /// Launchpad and the Dock do rather than starting a second process.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        openSettings()
+        return true
     }
 
     private func registerHotkeys() {
