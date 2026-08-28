@@ -29,7 +29,13 @@ open build/Flip.app
 
 The build needs no dependencies and no Xcode project. It uses the Swift compiler that ships with the Xcode Command Line Tools.
 
-To keep it around, drag `build/Flip.app` into `/Applications`.
+To keep it around, and to be able to launch it from Spotlight:
+
+```
+./scripts/install.sh
+```
+
+That builds it, copies it to `/Applications`, and reopens it. Spotlight does not index apps sitting in a build directory, which is why running it from there works but searching for it does not. The signature does not change, so the Accessibility permission carries over.
 
 ## First run: two things to set
 
@@ -49,6 +55,9 @@ It puts a self-signed certificate called "Flip Dev" in your login Keychain and s
 ## Settings
 
 - **Provider** — OpenAI (or anything that speaks the OpenAI chat completions format) or Anthropic.
+- **Credential** (Anthropic only) — an API key, or the login Anthropic's own CLI already holds. Picking the CLI login means no key is pasted anywhere: Flip asks `ant auth print-credentials --access-token` for a short-lived token and sends it as `Authorization: Bearer` with the `oauth-2025-04-20` beta header. Set it up with `ant auth login`. Whether that draws on a subscription or on API credits depends on the account, not on Flip.
+
+  There is no equivalent for OpenAI. A ChatGPT subscription does not include API access, and there is no supported way for a third-party app to use one. Flip ships no OAuth client id of its own: signing in with another product's first-party client, which is how several tools graft a subscription onto a third-party app, breaks the provider's terms, and in an open repository the client id would be published in the clear.
 - **Base URL** — prefilled per provider; change it to point at a compatible gateway.
 - **Model** — free text, with presets per provider. Default is `gpt-5.6-luna`.
 - **Effort** — how hard the model thinks. Sent as `reasoning_effort` to OpenAI and as `output_config.effort` to Anthropic. Default `medium`. If a model does not accept one, Flip retries without it rather than failing.
@@ -93,9 +102,11 @@ Launching the app while it is already running also opens Settings, which is the 
 build/Flip.app/Contents/MacOS/Flip --prompt
 build/Flip.app/Contents/MacOS/Flip --prompt --peek
 build/Flip.app/Contents/MacOS/Flip --translate "안녕하세요, 오늘 회의는 3시입니다"
+build/Flip.app/Contents/MacOS/Flip --screenshot ./docs
+build/Flip.app/Contents/MacOS/Flip --popup-demo
 ```
 
-The first two print the exact system prompt that will be sent. The third runs one real translation and prints the result, the model, and the latency.
+The first two print the exact system prompt that will be sent. `--translate` runs one real translation and prints the result, the model, and the latency. `--screenshot` renders every interface surface to PNG without needing a visible screen. `--popup-demo` shows the result panel and toggles the original, printing the frame each time: the top edge must not move, because showing the original resizes the panel rather than repositioning it.
 
 ## How it reads and writes text
 

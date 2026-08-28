@@ -24,6 +24,10 @@ final class PopupPanel {
 
     private var panel: NSPanel?
     private let model = PopupModel()
+    /// Where this interaction's panel was first placed. Every later update keeps that corner,
+    /// so clicking Original resizes the panel instead of moving it to wherever the pointer
+    /// has since travelled.
+    private var pinnedTopLeft: NSPoint?
     private var escMonitor: Any?
     private var clickMonitor: Any?
     private var dismissWorkItem: DispatchWorkItem?
@@ -54,6 +58,12 @@ final class PopupPanel {
         present(interactive: true)
         cancelDismiss()
     }
+
+    /// Current panel frame, for the --popup-demo check.
+    var currentFrame: NSRect? { panel?.frame }
+
+    /// Exposed so --popup-demo can exercise the same path the Original button uses.
+    func toggleOriginalForTesting() { toggleOriginal() }
 
     fileprivate func toggleOriginal() {
         model.showOriginal.toggle()
@@ -88,6 +98,7 @@ final class PopupPanel {
     func hide() {
         cancelDismiss()
         removeMonitors()
+        pinnedTopLeft = nil
         panel?.orderOut(nil)
     }
 
@@ -99,12 +110,18 @@ final class PopupPanel {
         panel.ignoresMouseEvents = false
 
         panel.contentView?.layoutSubtreeIfNeeded()
-        let size = panel.contentView?.fittingSize ?? NSSize(width: 380, height: 120)
-        let width = max(300, min(420, size.width))
-        let height = max(56, min(460, size.height))
-
-        let origin = anchorPoint(for: NSSize(width: width, height: height))
-        panel.setFrame(NSRect(origin: origin, size: NSSize(width: width, height: height)), display: true)
+        let fitting = panel.contentView?.fittingSize ?? NSSize(width: 380, height: 120)
+        let size = NSSize(width: max(300, min(420, fitting.width)),
+                          height: max(56, min(460, fitting.height)))
+        let origin: NSPoint
+        if let topLeft = pinnedTopLeft {
+            // Keep the top edge where it was and grow downward, clamped to the screen.
+            origin = clamp(NSPoint(x: topLeft.x, y: topLeft.y - size.height), size: size)
+        } else {
+            origin = anchorPoint(for: size)
+        }
+        pinnedTopLeft = NSPoint(x: origin.x, y: origin.y + size.height)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
         panel.orderFrontRegardless()
 
         installMonitors(dismissOnOutsideClick: interactive)
@@ -149,6 +166,16 @@ final class PopupPanel {
         if y < visible.minY + 8 { y = mouse.y + 18 }
         if y + size.height > visible.maxY - 8 { y = visible.maxY - size.height - 8 }
         return NSPoint(x: x, y: y)
+    }
+
+    private func clamp(_ origin: NSPoint, size: NSSize) -> NSPoint {
+        let screen = NSScreen.screens.first { $0.frame.contains(NSPoint(x: origin.x, y: origin.y + size.height)) }
+            ?? NSScreen.main
+        guard let visible = screen?.visibleFrame else { return origin }
+        var point = origin
+        point.x = min(max(point.x, visible.minX + 8), visible.maxX - size.width - 8)
+        point.y = min(max(point.y, visible.minY + 8), visible.maxY - size.height - 8)
+        return point
     }
 
     private func copy(_ text: String) {

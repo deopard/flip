@@ -76,9 +76,26 @@ enum Doctor {
         print("provider            \(settings.provider.rawValue)")
         print("base URL            \(settings.baseURL)")
         print("model               \(settings.model)")
-        let key = settings.apiKey
-        print("API key             \(key.isEmpty ? "MISSING" : "present, \(key.count) characters")")
-        if key.isEmpty {
+        if settings.provider == .anthropic {
+            print("credential          \(settings.credentialSource.displayName)")
+        }
+        if settings.usesCLILogin {
+            let summary = AnthropicCLICredentials.statusSummary()
+            print("anthropic CLI       \(summary)")
+            if !AnthropicCLICredentials.isInstalled {
+                problems.append("The credential is set to the Anthropic CLI login but `ant` is not installed. Install Anthropic's CLI and run `ant auth login`, or switch the credential back to an API key in Settings.")
+            } else if summary.hasPrefix("not logged in") {
+                problems.append("Anthropic's CLI is installed but has no active login. Run `ant auth login` in a terminal.")
+            }
+        }
+
+        let key = settings.usesCLILogin ? "" : settings.apiKey
+        if !settings.usesCLILogin {
+            print("API key             \(key.isEmpty ? "MISSING" : "present, \(key.count) characters")")
+        }
+        if settings.usesCLILogin {
+            // The credential comes from the CLI; there is no stored key to inspect.
+        } else if key.isEmpty {
             problems.append("No API key stored. Open the menu bar icon, then Settings, and paste one in.")
         } else {
             // Never print the key. Print only its shape.

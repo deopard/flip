@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var settings = Settings.shared
     @State private var testState: TestState = .idle
     @State private var accessibilityGranted = TextAccess.hasAccessibilityPermission()
+    @State private var cliStatus = AnthropicCLICredentials.statusSummary()
 
     enum TestState: Equatable {
         case idle, running
@@ -28,6 +29,10 @@ struct SettingsView: View {
         .frame(width: 580, height: 830)
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             accessibilityGranted = TextAccess.hasAccessibilityPermission()
+        }
+        .onChange(of: settings.credentialSource) { _, _ in
+            AnthropicCLICredentials.invalidate()
+            cliStatus = AnthropicCLICredentials.statusSummary()
         }
     }
 
@@ -85,10 +90,29 @@ struct SettingsView: View {
                     label("Base URL")
                     TextField("", text: $settings.baseURL).textFieldStyle(.roundedBorder)
                 }
-                GridRow {
-                    label("API key")
-                    SecureField(settings.provider.keyHint, text: $settings.apiKey)
-                        .textFieldStyle(.roundedBorder)
+                if settings.provider == .anthropic {
+                    GridRow {
+                        label("Credential")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Picker("", selection: $settings.credentialSource) {
+                                ForEach(CredentialSource.allCases) { Text($0.displayName).tag($0) }
+                            }
+                            .labelsHidden()
+                            .frame(width: 240)
+                            if settings.credentialSource == .cliLogin {
+                                Text("Reuses the login `ant auth login` already stored, so no key is pasted here. Status: \(cliStatus)")
+                                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                if !settings.usesCLILogin {
+                    GridRow {
+                        label("API key")
+                        SecureField(settings.provider.keyHint, text: $settings.apiKey)
+                            .textFieldStyle(.roundedBorder)
+                    }
                 }
                 GridRow {
                     label("Model")
@@ -118,7 +142,7 @@ struct SettingsView: View {
                     Color.clear.frame(width: 1, height: 1)
                     HStack(spacing: 9) {
                         Button("Test connection") { runTest() }
-                            .disabled(testState == .running || settings.apiKey.isEmpty)
+                            .disabled(testState == .running || (settings.apiKey.isEmpty && !settings.usesCLILogin))
                         testResult
                         Spacer(minLength: 0)
                     }

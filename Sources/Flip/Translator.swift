@@ -82,7 +82,9 @@ enum Translator {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TranslatorError.emptyInput }
         guard trimmed.count <= maxCharacters else { throw TranslatorError.tooLong(trimmed.count) }
-        guard !settings.usableAPIKey.isEmpty else { throw TranslatorError.missingKey }
+        if !settings.usesCLILogin {
+            guard !settings.usableAPIKey.isEmpty else { throw TranslatorError.missingKey }
+        }
 
         let system = systemPrompt(target: settings.resolvedTarget(for: mode), style: settings.stylePrompt)
         let started = Date()
@@ -210,7 +212,15 @@ enum Translator {
         request.httpMethod = "POST"
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(settings.usableAPIKey, forHTTPHeaderField: "x-api-key")
+        var betas: [String] = []
+        if settings.usesCLILogin {
+            // OAuth tokens go on Authorization: Bearer, not x-api-key, and need this beta.
+            let token = try AnthropicCLICredentials.accessToken()
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            betas.append("oauth-2025-04-20")
+        } else {
+            request.setValue(settings.usableAPIKey, forHTTPHeaderField: "x-api-key")
+        }
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
         var body: [String: Any] = [
@@ -227,7 +237,10 @@ enum Translator {
             // Server-side fallbacks: if a safety classifier declines the text, Anthropic reroutes
             // by refusal category instead of handing back an unusable response.
             body["fallbacks"] = "default"
-            request.setValue("server-side-fallback-2026-07-01", forHTTPHeaderField: "anthropic-beta")
+            betas.append("server-side-fallback-2026-07-01")
+        }
+        if !betas.isEmpty {
+            request.setValue(betas.joined(separator: ","), forHTTPHeaderField: "anthropic-beta")
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

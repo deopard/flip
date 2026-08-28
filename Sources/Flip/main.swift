@@ -21,6 +21,39 @@ if arguments.first == "--set-key" {
     exit(stored.isEmpty ? 1 : 0)
 }
 
+func describePopup(_ label: String, _ frame: NSRect?) {
+    guard let frame else { print("\(label): no panel"); return }
+    let padded = label.padding(toLength: 18, withPad: " ", startingAt: 0)
+    print("\(padded) x=\(Int(frame.origin.x))  top=\(Int(frame.origin.y + frame.height))  height=\(Int(frame.height))")
+}
+
+// Shows the result popup and toggles the original, printing the frame at each step.
+// The top edge must not move: clicking Original resizes the panel, it does not reposition it.
+//   Flip --popup-demo
+if arguments.first == "--popup-demo" {
+    MainActor.assumeIsolated {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+
+
+        PopupPanel.shared.showResult(
+            source: "We are seeing a spike in failed exports on the desktop client since the 3.2 release, and a few customers have already written in about it.",
+            translated: "3.2 릴리스 이후 데스크톱 클라이언트에서 내보내기 실패가 급증하고 있습니다.",
+            meta: "demo")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        describePopup("translation only", PopupPanel.shared.currentFrame)
+
+        PopupPanel.shared.toggleOriginalForTesting()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        describePopup("original shown", PopupPanel.shared.currentFrame)
+
+        PopupPanel.shared.toggleOriginalForTesting()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        describePopup("original hidden", PopupPanel.shared.currentFrame)
+    }
+    exit(0)
+}
+
 // Prints every precondition the shortcuts depend on.
 //   Flip --doctor
 if arguments.first == "--doctor" {

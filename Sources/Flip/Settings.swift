@@ -49,6 +49,20 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
 
 // MARK: - Languages
 
+enum CredentialSource: String, CaseIterable, Codable, Identifiable {
+    case apiKey
+    case cliLogin
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .apiKey: return "API key"
+        case .cliLogin: return "Anthropic CLI login (ant)"
+        }
+    }
+}
+
 enum Language {
     /// Sentinel used by both direction pickers: translate into whichever of the two
     /// configured languages the input is NOT already written in.
@@ -74,6 +88,11 @@ final class Settings: ObservableObject {
     @Published var model: String { didSet { defaults.set(model, forKey: "model") } }
     /// Sent as `reasoning_effort` to OpenAI and as `output_config.effort` to Anthropic.
     @Published var effort: String { didSet { defaults.set(effort, forKey: "effort") } }
+    /// Anthropic only. `cliLogin` reuses the credential `ant auth login` stored, so no key is
+    /// pasted anywhere.
+    @Published var credentialSource: CredentialSource {
+        didSet { defaults.set(credentialSource.rawValue, forKey: "credentialSource") }
+    }
 
     /// Target language for the replace shortcut (option+command+apostrophe).
     @Published var replaceLanguage: String { didSet { defaults.set(replaceLanguage, forKey: "replaceLanguage") } }
@@ -115,12 +134,17 @@ final class Settings: ObservableObject {
     /// The key as it should be sent. Always use this, never `apiKey`, when building a request.
     var usableAPIKey: String { Settings.sanitize(apiKey) }
 
+    /// True when this configuration takes its credential from the Anthropic CLI rather than a
+    /// pasted key. Only Anthropic offers this; OpenAI has no supported equivalent.
+    var usesCLILogin: Bool { provider == .anthropic && credentialSource == .cliLogin }
+
     private init() {
         let p = Provider(rawValue: defaults.string(forKey: "provider") ?? "") ?? .openai
         provider = p
         baseURL = defaults.string(forKey: "baseURL") ?? p.defaultBaseURL
         model = defaults.string(forKey: "model") ?? "gpt-5.6-luna"
         effort = defaults.string(forKey: "effort") ?? "medium"
+        credentialSource = CredentialSource(rawValue: defaults.string(forKey: "credentialSource") ?? "") ?? .apiKey
         replaceLanguage = defaults.string(forKey: "replaceLanguage") ?? "English"
         peekLanguage = defaults.string(forKey: "peekLanguage") ?? "Korean"
         stylePrompt = defaults.string(forKey: "stylePrompt") ?? ""
