@@ -57,12 +57,19 @@ Measured with it: Slack's composer is an `AXTextArea` with a settable value, Not
 
 1. Get `Flip-<version>-macos-universal.zip` from the [releases page](../../releases). Universal, so it runs on Apple Silicon and Intel.
 2. Unzip it and drag `Flip.app` into your **Applications** folder.
-3. **Right-click** (or control-click) `Flip.app` and choose **Open**. Do not double-click it the first time.
-4. A dialog says macOS cannot verify the developer. Click **Open**.
+3. Open Terminal and run:
 
-Step 3 matters. Double-clicking gives you a dialog with no way to continue, because the app is not notarized: this project has no Apple Developer Program membership, which is what notarization requires. Right-clicking and choosing Open is the supported way to run an app anyway, and macOS remembers the decision, so you only do it once.
+   ```
+   xattr -d com.apple.quarantine /Applications/Flip.app
+   ```
 
-If your Mac is managed by an employer, this may be blocked outright. Building from source is then the only route, and it is the section below.
+4. Open Flip normally.
+
+Step 3 is needed because the app is not notarized: this project has no Apple Developer Program membership, which is what notarization requires, so macOS blocks it on first launch.
+
+**Control-clicking and choosing Open does not work.** That was the way to do this until macOS 15, and it is still what most instructions on the internet tell you. Apple removed it: on macOS 15 and later an app that fails notarization has to be allowed from System Settings instead. If you would rather not use Terminal, that route is: double-click Flip and dismiss the warning, then open **System Settings, Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to the line about Flip.
+
+If your Mac is managed by an employer, both routes may be blocked. Building from source is then the only option, and it is the section below: an app you built yourself was never downloaded, so it carries no quarantine flag and opens normally.
 
 ### Or build it
 
@@ -171,7 +178,9 @@ A Mac that downloads this app refuses to open it: Gatekeeper reports that Apple 
 
 This project has no Developer ID certificate, so that is a purchase and setup step rather than a code change. Once one exists, the change here is the identity in `scripts/release.sh` plus a notarization step after it.
 
-Until then, released builds are signed ad hoc and carry the quarantine flag once downloaded, which is why the install instructions above start with right-click, Open. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
+Until then, released builds are signed ad hoc and carry the quarantine flag once downloaded, which is why the install instructions above clear it by hand.
+
+Ad-hoc signing has a second cost worth knowing about. The signature's identity is the binary's own hash, so every release is a different app as far as macOS is concerned, and the Accessibility permission you granted does not carry over to the next version. Worse, the old entry stays in the list looking switched on while the new build has no permission at all. If a new version says it needs Accessibility access while the switch is already on, remove the Flip row with the minus button and grant it again, or run `tccutil reset Accessibility video.cutback.flip`. A Developer ID certificate would fix this too, since the identity would then be the certificate rather than the hash. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
 
 `scripts/release.sh` produces what the releases page carries: a universal binary for Apple Silicon and Intel, ad-hoc signed, archived with `ditto` so the signature survives.
 
