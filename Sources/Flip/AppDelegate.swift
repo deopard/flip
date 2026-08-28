@@ -222,6 +222,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // --- work out what to do and what text to work on ---
+        // Where the selection sits on screen, read now: the synthetic copy below can move or
+        // clear it, and the panel is placed against it rather than against the pointer.
+        PopupPanel.shared.captureAnchor(await offMain { TextAccess.selectionBounds() })
+
         // The selected text always comes from the clipboard, never from Accessibility.
         // Electron apps flatten their accessibility strings: every line break disappears and
         // emoji and mentions become U+FFFC. The clipboard returns what was really selected.

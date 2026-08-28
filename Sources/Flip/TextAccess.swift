@@ -150,6 +150,76 @@ enum TextAccess {
         return text
     }
 
+    // MARK: - Where the selection is on screen
+
+    /// Screen rectangle of the selected text, in Cocoa coordinates.
+    ///
+    /// Accessibility reports this through `AXBoundsForRange`, in screen coordinates with the
+    /// origin at the top left of the primary display and y increasing downward, which is the
+    /// opposite of AppKit. Returns nil when nothing usable is selected, or when the app does
+    /// not answer the query.
+    static func selectionBounds() -> NSRect? {
+        // The focused element first: keyboard selections and selections inside the field you
+        // are typing in live there.
+        if let element = focusedElement(), let rect = boundsOfSelection(in: element) { return rect }
+
+        // Otherwise the element under the pointer, which after a drag is the text just dragged
+        // across, even when focus stayed somewhere else.
+        let mouse = NSEvent.mouseLocation
+        if let element = elementAt(cocoaPoint: mouse), let rect = boundsOfSelection(in: element) {
+            return rect
+        }
+        return nil
+    }
+
+    private static func elementAt(cocoaPoint: NSPoint) -> AXUIElement? {
+        guard let primary = primaryScreenFrame else { return nil }
+        let system = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(system, 0.35)
+        var element: AXUIElement?
+        let axPoint = CGPoint(x: cocoaPoint.x, y: primary.maxY - cocoaPoint.y)
+        guard AXUIElementCopyElementAtPosition(system, Float(axPoint.x), Float(axPoint.y), &element) == .success else {
+            return nil
+        }
+        return element
+    }
+
+    private static func boundsOfSelection(in element: AXUIElement) -> NSRect? {
+        var rangeValue: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+              let rangeValue else { return nil }
+
+        var range = CFRange()
+        guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &range), range.length > 0 else { return nil }
+
+        var boundsValue: AnyObject?
+        guard AXUIElementCopyParameterizedAttributeValue(element,
+                                                         kAXBoundsForRangeParameterizedAttribute as CFString,
+                                                         rangeValue as CFTypeRef,
+                                                         &boundsValue) == .success,
+              let boundsValue else { return nil }
+
+        var rect = CGRect.zero
+        guard AXValueGetValue(boundsValue as! AXValue, .cgRect, &rect),
+              rect.width > 0, rect.height > 0 else { return nil }
+
+        return flipToCocoa(rect)
+    }
+
+    /// The display whose origin is at zero. AppKit measures every other screen relative to it,
+    /// and Accessibility measures downward from its top edge.
+    private static var primaryScreenFrame: NSRect? {
+        NSScreen.screens.first { $0.frame.origin == .zero }?.frame ?? NSScreen.screens.first?.frame
+    }
+
+    private static func flipToCocoa(_ rect: CGRect) -> NSRect? {
+        guard let primary = primaryScreenFrame else { return nil }
+        return NSRect(x: rect.origin.x,
+                      y: primary.maxY - rect.origin.y - rect.height,
+                      width: rect.width,
+                      height: rect.height)
+    }
+
     // MARK: - Synthetic keystrokes
 
     private static func modifiersAreHeld() -> Bool {

@@ -28,6 +28,10 @@ final class PopupPanel {
     /// so clicking Original resizes the panel instead of moving it to wherever the pointer
     /// has since travelled.
     private var pinnedTopLeft: NSPoint?
+    /// Rectangle of the text this interaction is about, captured before the panel is shown.
+    /// The panel hangs off it, so it appears next to what you selected rather than wherever
+    /// the pointer happened to stop.
+    private var anchorRect: NSRect?
     private var escMonitor: Any?
     private var clickMonitor: Any?
     private var dismissWorkItem: DispatchWorkItem?
@@ -35,6 +39,12 @@ final class PopupPanel {
     private init() {}
 
     // MARK: - Public API
+
+    /// Called before the first panel of an interaction, while the selection still exists.
+    /// The synthetic copy and the paste that follow can move or clear it.
+    func captureAnchor(_ rect: NSRect?) {
+        anchorRect = rect
+    }
 
     func showWorking(_ status: String) {
         model.showOriginal = false
@@ -99,6 +109,7 @@ final class PopupPanel {
         cancelDismiss()
         removeMonitors()
         pinnedTopLeft = nil
+        anchorRect = nil
         panel?.orderOut(nil)
     }
 
@@ -153,8 +164,33 @@ final class PopupPanel {
         return created
     }
 
-    /// Anchor just below and right of the pointer, clamped to the active screen.
+    /// Hangs the panel off the selected text: aligned with its left edge, directly below it,
+    /// flipping above when there is no room. Falls back to the pointer only when the app would
+    /// not say where the selection is.
     private func anchorPoint(for size: NSSize) -> NSPoint {
+        let gap: CGFloat = 8
+
+        guard let rect = anchorRect else { return pointerAnchor(for: size) }
+
+        let screen = NSScreen.screens.first { $0.frame.intersects(rect) }
+            ?? NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+            ?? NSScreen.main
+        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+
+        var x = rect.minX
+        var y = rect.minY - size.height - gap          // below the selection
+
+        if y < visible.minY + gap {
+            y = rect.maxY + gap                        // no room below, sit above it
+        }
+        if y + size.height > visible.maxY - gap {
+            y = visible.maxY - size.height - gap
+        }
+        x = min(max(x, visible.minX + gap), visible.maxX - size.width - gap)
+        return NSPoint(x: x, y: y)
+    }
+
+    private func pointerAnchor(for size: NSSize) -> NSPoint {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)

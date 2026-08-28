@@ -35,6 +35,8 @@ The text itself always comes from the clipboard, never from Accessibility, even 
 
 A field the app marks as secure, such as a password box, is refused outright under every shortcut. Flip will neither read it nor paste over it.
 
+The popup is placed against the selection, not the pointer: aligned with its left edge and directly below it, flipping above when there is no room. Where the app does not answer `AXBoundsForRange`, and not all do, it falls back to the pointer.
+
 Check what it will do in any app with `--probe-focus`, which reports the focused element's role, whether its value can be written, and the decision that follows:
 
 ```

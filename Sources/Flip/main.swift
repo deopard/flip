@@ -68,6 +68,11 @@ if arguments.first == "--probe-focus" {
         let info = TextAccess.focusInfo()
         print("app       \(info.appName ?? "unknown")")
         print("focus     \(info.summary)")
+        if let rect = TextAccess.selectionBounds() {
+            print("selection x=\(Int(rect.minX)) y=\(Int(rect.minY)) w=\(Int(rect.width)) h=\(Int(rect.height))  (cocoa coords)")
+        } else {
+            print("selection bounds unavailable; the popup would fall back to the pointer")
+        }
         print("decision  \(AutoMode.focusOnlyDescription())")
         print("          the shortcut also copies, to read the real text and to see whether")
         print("          the selection is inside this element or somewhere else")
