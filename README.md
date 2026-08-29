@@ -165,7 +165,7 @@ It puts a self-signed certificate called "Flip Dev" in your login Keychain and s
 
 ## Settings
 
-- **Provider** — OpenAI (or anything that speaks the OpenAI chat completions format) or Anthropic.
+- **Provider** — OpenAI (or anything that speaks the OpenAI chat completions format), OpenRouter, or Anthropic. OpenRouter is the way to reach Gemini, DeepSeek, Qwen, GLM and the rest from one key; it speaks the same chat completions format, so all it changes is the base URL and the model presets.
 - **Credential** (Anthropic only) — an API key, or the login Anthropic's own CLI already holds. Picking the CLI login means no key is pasted anywhere: Flip asks `ant auth print-credentials --access-token` for a short-lived token and sends it as `Authorization: Bearer` with the `oauth-2025-04-20` beta header. Set it up with `ant auth login`. Whether that draws on a subscription or on API credits depends on the account, not on Flip.
 
   There is no equivalent for OpenAI. A ChatGPT subscription does not include API access, and there is no supported way for a third-party app to use one. Flip ships no OAuth client id of its own: signing in with another product's first-party client, which is how several tools graft a subscription onto a third-party app, breaks the provider's terms, and in an open repository the client id would be published in the clear.
@@ -245,6 +245,31 @@ Releases are signed with a self-signed certificate rather than ad hoc, which is 
 Versions up to and including 0.1.0 were signed ad hoc. Moving from one of those to 0.1.1 needs the permission granted once more; after that it carries over. Some centrally managed Macs block that outright, in which case building from source is the only route: a locally built app was never downloaded, so it carries no quarantine flag and opens normally.
 
 `scripts/release.sh` produces what the releases page carries: a universal binary for Apple Silicon and Intel, ad-hoc signed, archived with `ditto` so the signature survives.
+
+## Choosing a model
+
+Translation is not a reasoning task, so the expensive models buy little here and the difference between them is worth measuring rather than assuming:
+
+```
+/Applications/Flip.app/Contents/MacOS/Flip --bench 3
+/Applications/Flip.app/Contents/MacOS/Flip --bench 5 "qwen/qwen3.7-flash,google/gemini-2.5-flash-lite,openai/gpt-5.6-luna"
+```
+
+It translates the same message with each model, prints median latency, and then prints every translation so you can judge whether the cheap one is good enough. It costs real money, one request per run.
+
+For reference, dollars per million tokens weighted 3 to 1 input against output, from OpenRouter's own model list:
+
+| Model | $/M | Against `gpt-5.6-luna` |
+|---|---:|---|
+| `qwen/qwen3.7-flash` | 0.055 | 8x cheaper |
+| `deepseek/deepseek-v4-flash` | 0.107 | 4x cheaper |
+| `z-ai/glm-5.3-flash` | 0.119 | 3.8x cheaper |
+| `openai/gpt-5-nano` | 0.137 | 3.3x cheaper |
+| `google/gemini-2.5-flash-lite` | 0.175 | 2.6x cheaper |
+| `openai/gpt-5.6-luna` | 0.450 | the default |
+| `anthropic/claude-haiku-4.5` | 2.000 | 4.4x more |
+
+Effort is the other lever, and often the bigger one: lower effort means fewer reasoning tokens, which is less latency and less money at the same quality for work like this.
 
 ## Checking what Flip actually received
 

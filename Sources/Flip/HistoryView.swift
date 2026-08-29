@@ -126,7 +126,8 @@ struct HistoryView: View {
                 }
                 Text(entry.targetLabel).font(.system(size: 10.5)).foregroundStyle(.tertiary)
                 Spacer()
-                Text("\(entry.model) \u{00B7} \(entry.latencyMs) ms")
+                Text(entry.readMs.map { "\(entry.model) \u{00B7} read \($0) + model \(entry.latencyMs) ms" }
+                        ?? "\(entry.model) \u{00B7} \(entry.latencyMs) ms")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                 Button(copiedID == entry.id ? "Copied" : "Copy") { copy(entry) }
                     .buttonStyle(.plain)

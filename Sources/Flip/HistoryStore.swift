@@ -11,9 +11,12 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
     let model: String
     let latencyMs: Int
     let appName: String?
+    /// Time spent reading the selection before the request went out. The rest of what you feel
+    /// is `latencyMs`, plus the paste afterwards.
+    let readMs: Int?
 
     init(mode: Mode, source: String, translated: String, targetLabel: String,
-         model: String, latencyMs: Int, appName: String?, date: Date = Date()) {
+         model: String, latencyMs: Int, appName: String?, readMs: Int? = nil, date: Date = Date()) {
         self.id = UUID()
         self.date = date
         self.mode = mode
@@ -23,6 +26,7 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
         self.model = model
         self.latencyMs = latencyMs
         self.appName = appName
+        self.readMs = readMs
     }
 }
 

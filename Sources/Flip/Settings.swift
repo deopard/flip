@@ -5,6 +5,7 @@ import Combine
 
 enum Provider: String, CaseIterable, Codable, Identifiable {
     case openai
+    case openrouter
     case anthropic
 
     var id: String { rawValue }
@@ -12,6 +13,7 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
     var displayName: String {
         switch self {
         case .openai: return "OpenAI (and OpenAI-compatible)"
+        case .openrouter: return "OpenRouter (everything else)"
         case .anthropic: return "Anthropic (Claude)"
         }
     }
@@ -19,6 +21,7 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
     var defaultBaseURL: String {
         switch self {
         case .openai: return "https://api.openai.com/v1"
+        case .openrouter: return "https://openrouter.ai/api/v1"
         case .anthropic: return "https://api.anthropic.com/v1"
         }
     }
@@ -27,7 +30,7 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
     /// values a given model does not support, so this is a plain list plus an opt out.
     var effortLevels: [String] {
         switch self {
-        case .openai: return [Settings.effortUnset, "minimal", "low", "medium", "high"]
+        case .openai, .openrouter: return [Settings.effortUnset, "minimal", "low", "medium", "high"]
         case .anthropic: return [Settings.effortUnset, "low", "medium", "high", "xhigh", "max"]
         }
     }
@@ -35,6 +38,20 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
     var suggestedModels: [String] {
         switch self {
         case .openai: return ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5"]
+        case .openrouter:
+            // Cheap and fast first, since translation is not a reasoning task. Prices are
+            // dollars per million tokens weighted 3:1 input to output, read from OpenRouter's
+            // own model list, for comparison against gpt-5.6-luna at 0.45.
+            return [
+                "qwen/qwen3.7-flash",            // 0.055
+                "deepseek/deepseek-v4-flash",    // 0.107
+                "z-ai/glm-5.3-flash",            // 0.119
+                "openai/gpt-5-nano",             // 0.137
+                "google/gemini-2.5-flash-lite",  // 0.175
+                "google/gemini-3.1-flash-lite",  // 0.562
+                "openai/gpt-5.6-luna",           // 0.450
+                "anthropic/claude-haiku-4.5"     // 2.000
+            ]
         case .anthropic: return ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]
         }
     }
@@ -42,6 +59,7 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
     var keyHint: String {
         switch self {
         case .openai: return "sk-..."
+        case .openrouter: return "sk-or-v1-..."
         case .anthropic: return "sk-ant-..."
         }
     }

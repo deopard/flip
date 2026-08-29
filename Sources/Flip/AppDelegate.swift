@@ -217,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let settings = Settings.shared
         let appName = TextAccess.frontmostAppName()
+        let readStarted = Date()
 
         // Never read or overwrite a password field, whichever shortcut was pressed.
         if await offMain({ TextAccess.focusInfo().isSecure }) {
@@ -280,6 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             PopupPanel.shared.showWorking("Translating into \(settings.resolvedTarget(for: mode).label)")
         }
 
+        let readMs = Int(Date().timeIntervalSince(readStarted) * 1000)
         let target = settings.resolvedTarget(for: mode)
 
         let cleaned = source.map(AutoMode.cleanForTranslation)
@@ -312,7 +314,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             PopupPanel.shared.showResult(
                 source: text,
                 translated: outcome.text,
-                meta: "\(outcome.model)  \u{00B7}  \(outcome.latencyMs) ms  \u{00B7}  \(appName ?? "selection")")
+                meta: "\(outcome.model)  \u{00B7}  read \(readMs) ms + model \(outcome.latencyMs) ms  \u{00B7}  \(appName ?? "selection")")
         }
 
         HistoryStore.shared.add(HistoryEntry(mode: mode,
@@ -321,7 +323,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                              targetLabel: target.label,
                                              model: outcome.model,
                                              latencyMs: outcome.latencyMs,
-                                             appName: appName))
+                                             appName: appName,
+                                             readMs: readMs))
     }
 
     /// Runs blocking Accessibility / clipboard / synthetic-keystroke work off the main thread

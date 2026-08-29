@@ -79,6 +79,24 @@ if arguments.first == "--probe-focus" {
     exit(0)
 }
 
+// Compares models on the same text. Every run costs money.
+//   Flip --bench [runs] [model,model,...]
+if arguments.first == "--bench" {
+    let runs = Int(arguments.count > 1 ? arguments[1] : "3") ?? 3
+    let models = arguments.count > 2
+        ? arguments[2].split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+        : Settings.shared.provider.suggestedModels
+    let text = arguments.count > 3 ? arguments[3] : Bench.defaultSample
+
+    let semaphore = DispatchSemaphore(value: 0)
+    Task {
+        await Bench.run(runs: runs, models: models, text: text)
+        semaphore.signal()
+    }
+    semaphore.wait()
+    exit(0)
+}
+
 // Prints every precondition the shortcuts depend on.
 //   Flip --doctor
 if arguments.first == "--doctor" {

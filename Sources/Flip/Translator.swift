@@ -97,7 +97,7 @@ enum Translator {
 
         let output: String
         switch settings.provider {
-        case .openai:
+        case .openai, .openrouter:
             output = try await callOpenAI(system: system, user: text, settings: settings, apiKey: apiKey)
         case .anthropic:
             output = try await callAnthropic(system: system, user: text, settings: settings, apiKey: apiKey)
@@ -171,6 +171,11 @@ enum Translator {
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        if settings.provider == .openrouter {
+            // Optional, and the polite thing to send: OpenRouter attributes traffic with these.
+            request.setValue("https://github.com/deopard/flip", forHTTPHeaderField: "HTTP-Referer")
+            request.setValue("Flip", forHTTPHeaderField: "X-Title")
+        }
 
         var body: [String: Any] = [
             "model": settings.model,

@@ -32,7 +32,7 @@ enum TextAccess {
 
     private static func focusedElement() -> AXUIElement? {
         let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, 0.35)
+        AXUIElementSetMessagingTimeout(system, 0.12)
         var focused: AnyObject?
         guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let element = focused else { return nil }
@@ -168,10 +168,6 @@ enum TextAccess {
             if let rect = boundsFromRange(element) { return rect }
             if let rect = boundsFromTextMarkers(element) { return rect }
         }
-        // Web content often hangs the selection off a descendant of the focused element.
-        for element in candidateElements() {
-            if let rect = searchDescendants(element, depth: 0) { return rect }
-        }
         return nil
     }
 
@@ -185,7 +181,7 @@ enum TextAccess {
     private static func elementAt(cocoaPoint: NSPoint) -> AXUIElement? {
         guard let primary = primaryScreenFrame else { return nil }
         let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, 0.35)
+        AXUIElementSetMessagingTimeout(system, 0.12)
         var element: AXUIElement?
         let axPoint = CGPoint(x: cocoaPoint.x, y: primary.maxY - cocoaPoint.y)
         guard AXUIElementCopyElementAtPosition(system, Float(axPoint.x), Float(axPoint.y), &element) == .success else {
@@ -226,22 +222,6 @@ enum TextAccess {
                                                          &boundsValue) == .success,
               let boundsValue else { return nil }
         return decodeRect(boundsValue)
-    }
-
-    /// Breadth-limited walk. Web content puts the selection on a node below the element that
-    /// holds focus, but going deep or wide here costs a synchronous message per element.
-    private static func searchDescendants(_ element: AXUIElement, depth: Int) -> NSRect? {
-        guard depth < 4 else { return nil }
-        var childrenValue: AnyObject?
-        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenValue) == .success,
-              let children = childrenValue as? [AXUIElement] else { return nil }
-
-        for child in children.prefix(12) {
-            if let rect = boundsFromRange(child) { return rect }
-            if let rect = boundsFromTextMarkers(child) { return rect }
-            if let rect = searchDescendants(child, depth: depth + 1) { return rect }
-        }
-        return nil
     }
 
     private static func decodeRect(_ value: AnyObject) -> NSRect? {
