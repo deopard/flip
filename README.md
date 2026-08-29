@@ -71,6 +71,53 @@ Step 3 is needed because the app is not notarized: this project has no Apple Dev
 
 If your Mac is managed by an employer, both routes may be blocked. Building from source is then the only option, and it is the section below: an app you built yourself was never downloaded, so it carries no quarantine flag and opens normally.
 
+### If you would rather not touch the Terminal
+
+Paste this to an AI assistant that can run commands on your Mac. Claude Desktop, ChatGPT's Mac app with terminal access, Claude Code, Cursor and similar tools can all do it.
+
+```
+I downloaded a Mac app called Flip from https://github.com/deopard/flip/releases
+and I do not use the Terminal. Please set it up for me:
+
+1. Find the Flip zip file in my Downloads folder and unzip it.
+2. Move Flip.app into /Applications.
+3. Run: xattr -d com.apple.quarantine /Applications/Flip.app
+   The app is signed but not notarized, so macOS blocks it until that
+   download flag is cleared. This step is expected, not a sign that
+   anything is wrong with the app.
+4. Open Flip.
+5. Tell me to turn Flip on in System Settings, Privacy & Security,
+   Accessibility. It cannot read my selected text without that.
+
+If any step fails, run
+/Applications/Flip.app/Contents/MacOS/Flip --doctor
+and tell me in plain language what it says is missing.
+```
+
+Ask in whatever language you speak; the assistant will follow it either way. In Korean, for instance:
+
+```
+Flip이라는 맥 앱을 https://github.com/deopard/flip/releases 에서 받았는데
+터미널을 쓸 줄 몰라요. 대신 설치해 주세요.
+
+1. 다운로드 폴더에서 Flip 압축 파일을 찾아서 풀어주세요.
+2. Flip.app을 /Applications 로 옮겨주세요.
+3. 이 명령을 실행해 주세요: xattr -d com.apple.quarantine /Applications/Flip.app
+   이 앱은 서명은 되어 있지만 공증(notarization)은 안 되어 있어서,
+   저 다운로드 표시를 지우기 전까지 macOS가 실행을 막습니다.
+   앱에 문제가 있어서가 아니라 원래 필요한 단계입니다.
+4. Flip을 실행해 주세요.
+5. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 Flip을 켜라고
+   알려주세요. 그게 없으면 제가 선택한 글자를 읽지 못합니다.
+
+중간에 안 되는 게 있으면
+/Applications/Flip.app/Contents/MacOS/Flip --doctor
+를 실행하고 무엇이 빠졌는지 쉬운 말로 알려주세요.
+```
+
+Only paste instructions like this for software you actually mean to install. It runs a command on your machine, and the same shape of prompt would work just as well for something you did not want.
+
+
 ### Or build it
 
 ```
