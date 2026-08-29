@@ -31,7 +31,20 @@ enum Doctor {
             print("                    quit it before trusting the hotkey lines below")
         }
 
-        // 2. Accessibility, as answered by the app itself.
+        // 2. Quarantine, first, because it is invisible and causes a symptom that looks like
+        //    something else entirely: macOS will not remember the Accessibility permission for
+        //    an app it still considers freshly downloaded, so the grant appears to fail and the
+        //    request comes back on every launch.
+        let quarantined = quarantinedPaths()
+        if quarantined.isEmpty {
+            print("quarantine          clear")
+        } else {
+            print("quarantine          STILL SET on \(quarantined.count) path\(quarantined.count == 1 ? "" : "s")")
+            for path in quarantined.prefix(4) { print("                    \(path)") }
+            problems.append("The download flag is still on parts of the app, which stops macOS from remembering the Accessibility permission however many times you grant it. Clear it with: xattr -dr com.apple.quarantine \(Bundle.main.bundleURL.path). The -r is the part that matters; without it only the outer folder is cleared.")
+        }
+
+        // 3. Accessibility, as answered by the app itself.
         //
         // Deliberately NOT AXIsProcessTrusted() in this process. Accessibility trust belongs
         // to the asking process. A command-line tool started from a terminal that already holds
@@ -52,7 +65,7 @@ enum Doctor {
             problems.append("Start Flip once, then run this again. This tool cannot check the permission on the app's behalf: run from a terminal it would inherit the terminal's own permissions and tell you nothing about the app.")
         }
 
-        // 3. Hotkeys
+        // 4. Hotkeys
         if let status, status.isLive, !status.hotkeys.isEmpty {
             for (combo, explanation) in status.hotkeys.sorted(by: { $0.key < $1.key }) {
                 print("hotkey \(combo)            \(explanation)   (reported by the running app)")
@@ -70,7 +83,7 @@ enum Doctor {
             }
         }
 
-        // 4. Credentials and configuration
+        // 5. Credentials and configuration
         print("provider            \(settings.provider.rawValue)")
         print("base URL            \(settings.baseURL)")
         print("model               \(settings.model)")
@@ -124,7 +137,7 @@ enum Doctor {
         print("replace into        \(settings.resolvedTarget(for: .replace).label)")
         print("peek into           \(settings.resolvedTarget(for: .peek).label)")
 
-        // 5. Menu bar visibility, which is easy to miss on a Mac running a menu bar manager
+        // 6. Menu bar visibility, which is easy to miss on a Mac running a menu bar manager
         let hiders = ["Ice", "Bartender", "Hidden Bar", "Vanilla", "Dozer"]
         let running = NSWorkspace.shared.runningApplications.compactMap { $0.localizedName }
         let found = hiders.filter { running.contains($0) }
@@ -142,5 +155,24 @@ enum Doctor {
                 print("  \(index + 1). \(problem)")
             }
         }
+    }
+
+    /// Every file inside the bundle that still carries com.apple.quarantine.
+    private static func quarantinedPaths() -> [String] {
+        let root = Bundle.main.bundleURL
+        var found: [String] = []
+
+        func isQuarantined(_ url: URL) -> Bool {
+            url.withUnsafeFileSystemRepresentation { pointer in
+                guard let pointer else { return false }
+                return getxattr(pointer, "com.apple.quarantine", nil, 0, 0, XATTR_NOFOLLOW) >= 0
+            }
+        }
+
+        if isQuarantined(root) { found.append(root.path) }
+        if let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
+            for case let url as URL in walker where isQuarantined(url) { found.append(url.path) }
+        }
+        return found
     }
 }

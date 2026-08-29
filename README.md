@@ -60,12 +60,14 @@ Measured with it: Slack's composer is an `AXTextArea` with a settable value, Not
 3. Open Terminal and run:
 
    ```
-   xattr -d com.apple.quarantine /Applications/Flip.app
+   xattr -dr com.apple.quarantine /Applications/Flip.app
    ```
 
 4. Open Flip normally.
 
 Step 3 is needed because the app is not notarized: this project has no Apple Developer Program membership, which is what notarization requires, so macOS blocks it on first launch.
+
+The `-r` matters. Without it the flag is cleared from the folder but stays on everything inside, macOS still treats the app as freshly downloaded, and the symptom is confusing: it will not hold the Accessibility permission. You grant it, the app still says it needs access, and the request comes back every time you reopen it. `xattr -r /Applications/Flip.app | grep quarantine` should print nothing when it worked.
 
 **Control-clicking and choosing Open does not work.** That was the way to do this until macOS 15, and it is still what most instructions on the internet tell you. Apple removed it: on macOS 15 and later an app that fails notarization has to be allowed from System Settings instead. If you would rather not use Terminal, that route is: double-click Flip and dismiss the warning, then open **System Settings, Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to the line about Flip.
 
@@ -81,12 +83,16 @@ and I do not use the Terminal. Please set it up for me:
 
 1. Find the Flip zip file in my Downloads folder and unzip it.
 2. Move Flip.app into /Applications.
-3. Run: xattr -d com.apple.quarantine /Applications/Flip.app
+3. Run: xattr -dr com.apple.quarantine /Applications/Flip.app
+   The -r is important: without it the flag stays on the files inside
+   the app and macOS will refuse to remember the permission in step 5.
    The app is signed but not notarized, so macOS blocks it until that
    download flag is cleared. This step is expected, not a sign that
    anything is wrong with the app.
-4. Open Flip.
-5. Tell me to turn Flip on in System Settings, Privacy & Security,
+4. Check it worked: xattr -r /Applications/Flip.app | grep quarantine
+   should print nothing.
+5. Open Flip.
+6. Tell me to turn Flip on in System Settings, Privacy & Security,
    Accessibility. It cannot read my selected text without that.
 
 If any step fails, run
@@ -102,12 +108,16 @@ Flip이라는 맥 앱을 https://github.com/deopard/flip/releases 에서 받았�
 
 1. 다운로드 폴더에서 Flip 압축 파일을 찾아서 풀어주세요.
 2. Flip.app을 /Applications 로 옮겨주세요.
-3. 이 명령을 실행해 주세요: xattr -d com.apple.quarantine /Applications/Flip.app
+3. 이 명령을 실행해 주세요: xattr -dr com.apple.quarantine /Applications/Flip.app
+   -r 이 꼭 있어야 합니다. 없으면 앱 안쪽 파일에 표시가 남아서,
+   5번에서 권한을 줘도 macOS가 기억하지 않습니다.
    이 앱은 서명은 되어 있지만 공증(notarization)은 안 되어 있어서,
    저 다운로드 표시를 지우기 전까지 macOS가 실행을 막습니다.
    앱에 문제가 있어서가 아니라 원래 필요한 단계입니다.
-4. Flip을 실행해 주세요.
-5. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 Flip을 켜라고
+4. 잘 됐는지 확인해 주세요: xattr -r /Applications/Flip.app | grep quarantine
+   아무것도 안 나와야 정상입니다.
+5. Flip을 실행해 주세요.
+6. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 Flip을 켜라고
    알려주세요. 그게 없으면 제가 선택한 글자를 읽지 못합니다.
 
 중간에 안 되는 게 있으면

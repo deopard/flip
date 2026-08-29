@@ -88,8 +88,13 @@ case "${1:-}" in
     ;;
 esac
 
-if [[ -f "$IDENTITY_FILE" ]] && security find-identity -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$NAME"; then
-    echo "\"$NAME\" already set up. Nothing to do."
+# The identity file is not in version control, so a fresh clone will not have it. Never take
+# its absence as licence to mint a new certificate: that would change the app's identity and
+# put every existing user back to granting Accessibility again. Only the keychain is authority.
+if security find-identity -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$NAME"; then
+    add_to_search_list
+    record_identity
+    echo "Already set up; recorded the existing identity."
     exit 0
 fi
 
