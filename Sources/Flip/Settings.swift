@@ -39,20 +39,31 @@ enum Provider: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .openai: return ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5"]
         case .openrouter:
-            // Cheap and fast first, since translation is not a reasoning task. Prices are
-            // dollars per million tokens weighted 3:1 input to output, read from OpenRouter's
-            // own model list, for comparison against gpt-5.6-luna at 0.45.
+            // Ordered by measured round trip, not by price, because the two do not track each
+            // other: the cheapest model here was also the slowest by five times. Latencies are
+            // medians of three runs translating the same Korean message through OpenRouter,
+            // reproducible with --bench. Prices are dollars per million tokens weighted 3:1
+            // input to output, from OpenRouter's own model list.
             return [
-                "qwen/qwen3.7-flash",            // 0.055
-                "deepseek/deepseek-v4-flash",    // 0.107
-                "z-ai/glm-5.3-flash",            // 0.119
-                "openai/gpt-5-nano",             // 0.137
-                "google/gemini-2.5-flash-lite",  // 0.175
-                "google/gemini-3.1-flash-lite",  // 0.562
-                "openai/gpt-5.6-luna",           // 0.450
-                "anthropic/claude-haiku-4.5"     // 2.000
+                "z-ai/glm-5.3-flash",            //  2337 ms   0.119
+                "openai/gpt-5.6-luna",           //  2805 ms   0.450
+                "google/gemini-2.5-flash-lite",  //  4604 ms   0.175
+                "deepseek/deepseek-v4-flash",    //  7832 ms   0.107
+                "qwen/qwen3.7-flash",            // 12255 ms   0.055
+                "openai/gpt-5-nano",             // 15212 ms   0.137
+                "anthropic/claude-haiku-4.5",    //  not measured   2.000
+                "google/gemini-3.1-flash-lite"   //  not measured   0.562
             ]
         case .anthropic: return ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]
+        }
+    }
+
+    /// What a key from this provider starts with, where that is reliable enough to check.
+    var keyPrefix: String? {
+        switch self {
+        case .openai: return nil            // several shapes in circulation, and gateways differ
+        case .openrouter: return "sk-or-"
+        case .anthropic: return "sk-ant-"
         }
     }
 
@@ -165,12 +176,53 @@ final class Settings: ObservableObject {
 
     private var keychainAccount: String { "apiKey.\(provider.rawValue)" }
 
-    /// A pasted key often carries a trailing newline, a stray space, or an invisible
-    /// character. Any of those makes Foundation drop the whole Authorization header, and the
-    /// API then reports a missing key rather than a bad one. Strip anything that cannot
-    /// legally appear in an HTTP header value.
+    /// A pasted key often carries a trailing newline or a stray space. Either makes Foundation
+    /// drop the whole Authorization header, and the API then reports a missing key rather than
+    /// a bad one. Trim the ends and drop control characters; leave everything else, so a paste
+    /// that was not a key stays visibly wrong instead of being quietly filed into shape.
     static func sanitize(_ raw: String) -> String {
-        String(raw.unicodeScalars.filter { $0.value > 0x20 && $0.value != 0x7F })
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(trimmed.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7F })
+    }
+
+    /// Why the stored value cannot be an API key, or nil if it looks like one.
+    ///
+    /// The field shows dots, so a wrong paste is invisible: a clipboard full of something else
+    /// gets stored and every request fails with an error about the key that reads as though the
+    /// key were merely wrong. These checks are deliberately shallow. They catch pasting the
+    /// wrong thing, not a key with a typo in it, which only the API can tell you about.
+    var keyProblem: String? {
+        // Blocking read, for the same reason --doctor uses one: the published property is
+        // filled in asynchronously and a one-shot process checks before it lands.
+        let key = usableAPIKeyBlocking()
+        guard !key.isEmpty else { return nil }
+
+        if !key.allSatisfy({ $0.isASCII }) {
+            return "This is not an API key: it contains characters outside the Latin alphabet. Something else was pasted here."
+        }
+        if key.contains(where: { $0.isWhitespace }) {
+            return "This is not an API key: it contains spaces. Something else was pasted here."
+        }
+        if key.count < 20 {
+            return "This is too short to be an API key (\(key.count) characters)."
+        }
+        if key.count > 400 {
+            return "This is far too long to be an API key (\(key.count) characters). Something else was pasted here."
+        }
+        if let expected = provider.keyPrefix, !key.hasPrefix(expected) {
+            return "\(provider.displayName) keys start with \(expected). This one starts with \(key.prefix(min(6, key.count)))."
+        }
+        return nil
+    }
+
+    /// Writes the key and waits for it, for callers with no run loop to publish into. The
+    /// property's own setter only writes once a background read has landed, which a one-shot
+    /// command-line process never gives it time to do.
+    func storeAPIKey(_ raw: String) {
+        let value = Settings.sanitize(raw)
+        Keychain.set(value, account: keychainAccount)
+        apiKeyLoaded = true
+        apiKey = value
     }
 
     /// Reads the key off the main thread and publishes it. Safe to call repeatedly.
@@ -201,10 +253,11 @@ final class Settings: ObservableObject {
     var usesCLILogin: Bool { provider == .anthropic && credentialSource == .cliLogin }
 
     private init() {
-        let p = Provider(rawValue: defaults.string(forKey: "provider") ?? "") ?? .openai
+        let p = Provider(rawValue: defaults.string(forKey: "provider") ?? "") ?? .openrouter
         provider = p
         baseURL = defaults.string(forKey: "baseURL") ?? p.defaultBaseURL
-        model = defaults.string(forKey: "model") ?? "gpt-5.6-luna"
+        // The provider's first preset is its default, so the two cannot drift apart.
+        model = defaults.string(forKey: "model") ?? p.suggestedModels[0]
         effort = defaults.string(forKey: "effort") ?? "medium"
         credentialSource = CredentialSource(rawValue: defaults.string(forKey: "credentialSource") ?? "") ?? .apiKey
         replaceLanguage = defaults.string(forKey: "replaceLanguage") ?? "English"

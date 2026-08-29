@@ -100,7 +100,10 @@ enum Doctor {
             }
         }
 
-        let key = settings.usesCLILogin ? "" : settings.apiKey
+        // Blocking read on purpose: the published property is filled in on a background queue
+        // and this process exits before that lands, which used to print MISSING over a
+        // perfectly good key.
+        let key = settings.usesCLILogin ? "" : settings.usableAPIKeyBlocking()
         if !settings.usesCLILogin {
             print("API key             \(key.isEmpty ? "MISSING" : "present, \(key.count) characters")")
         }
@@ -129,9 +132,9 @@ enum Doctor {
             if !kept {
                 problems.append("The stored key contains a character that cannot go in an HTTP header, so the request is sent with no Authorization header at all. That is why the API says you did not provide a key. Re-paste the key with no line break, and check for a stray space or a non-Latin character.")
             }
-            let cleaned = Settings.sanitize(key)
-            if cleaned != key {
-                print("  after cleaning    \(cleaned.count) characters, \(key.count - cleaned.count) removed")
+            if let problem = settings.keyProblem {
+                print("  shape             DOES NOT LOOK LIKE A KEY")
+                problems.append(problem + " Open Settings and paste the key again, or run --set-key.")
             }
         }
         print("replace into        \(settings.resolvedTarget(for: .replace).label)")

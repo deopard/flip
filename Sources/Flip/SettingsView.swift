@@ -110,8 +110,15 @@ struct SettingsView: View {
                 if !settings.usesCLILogin {
                     GridRow {
                         label("API key")
-                        SecureField(settings.provider.keyHint, text: $settings.apiKey)
-                            .textFieldStyle(.roundedBorder)
+                        VStack(alignment: .leading, spacing: 4) {
+                            SecureField(settings.provider.keyHint, text: $settings.apiKey)
+                                .textFieldStyle(.roundedBorder)
+                            if let problem = settings.keyProblem {
+                                Label(problem, systemImage: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 11)).foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
                 GridRow {

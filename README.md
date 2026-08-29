@@ -165,7 +165,7 @@ It puts a self-signed certificate called "Flip Dev" in your login Keychain and s
 
 ## Settings
 
-- **Provider** — OpenAI (or anything that speaks the OpenAI chat completions format), OpenRouter, or Anthropic. OpenRouter is the way to reach Gemini, DeepSeek, Qwen, GLM and the rest from one key; it speaks the same chat completions format, so all it changes is the base URL and the model presets.
+- **Provider** — OpenRouter by default, or OpenAI directly (and anything else speaking the OpenAI chat completions format), or Anthropic. OpenRouter is the way to reach Gemini, DeepSeek, Qwen, GLM and the rest from one key; it speaks the same chat completions format, so all it changes is the base URL and the model presets.
 - **Credential** (Anthropic only) — an API key, or the login Anthropic's own CLI already holds. Picking the CLI login means no key is pasted anywhere: Flip asks `ant auth print-credentials --access-token` for a short-lived token and sends it as `Authorization: Bearer` with the `oauth-2025-04-20` beta header. Set it up with `ant auth login`. Whether that draws on a subscription or on API credits depends on the account, not on Flip.
 
   There is no equivalent for OpenAI. A ChatGPT subscription does not include API access, and there is no supported way for a third-party app to use one. Flip ships no OAuth client id of its own: signing in with another product's first-party client, which is how several tools graft a subscription onto a third-party app, breaks the provider's terms, and in an open repository the client id would be published in the clear.
@@ -257,17 +257,20 @@ Translation is not a reasoning task, so the expensive models buy little here and
 
 It translates the same message with each model, prints median latency, and then prints every translation so you can judge whether the cheap one is good enough. It costs real money, one request per run.
 
-For reference, dollars per million tokens weighted 3 to 1 input against output, from OpenRouter's own model list:
+Here is that measurement for the OpenRouter presets, translating the same Korean announcement into English, three runs each, median round trip. Prices are dollars per million tokens weighted 3 to 1 input against output, from OpenRouter's own model list.
 
-| Model | $/M | Against `gpt-5.6-luna` |
-|---|---:|---|
-| `qwen/qwen3.7-flash` | 0.055 | 8x cheaper |
-| `deepseek/deepseek-v4-flash` | 0.107 | 4x cheaper |
-| `z-ai/glm-5.3-flash` | 0.119 | 3.8x cheaper |
-| `openai/gpt-5-nano` | 0.137 | 3.3x cheaper |
-| `google/gemini-2.5-flash-lite` | 0.175 | 2.6x cheaper |
-| `openai/gpt-5.6-luna` | 0.450 | the default |
-| `anthropic/claude-haiku-4.5` | 2.000 | 4.4x more |
+| Model | Median | Range | $/M |
+|---|---:|---|---:|
+| `z-ai/glm-5.3-flash` | **2337 ms** | 2066-2529 | 0.119 |
+| `openai/gpt-5.6-luna` | 2805 ms | 2265-2908 | 0.450 |
+| `google/gemini-2.5-flash-lite` | 4604 ms | 3761-4862 | 0.175 |
+| `deepseek/deepseek-v4-flash` | 7832 ms | 7417-8443 | 0.107 |
+| `qwen/qwen3.7-flash` | 12255 ms | 9959-13004 | 0.055 |
+| `openai/gpt-5-nano` | 15212 ms | 15119-17499 | 0.137 |
+
+**Price and speed do not track each other.** The cheapest model in the list was also the slowest, by more than five times, and the third cheapest was the fastest. Latency here includes OpenRouter's own routing, so the same model called directly may differ.
+
+Quality was close enough across all six that speed and price decide it. Every one preserved the line breaks, the mentions, the emoji shortcode and the leading asterisk; only Gemini reflowed the last line into an indented list item. `z-ai/glm-5.3-flash` is the default because it was both faster and 3.8 times cheaper than the alternative.
 
 Effort is the other lever, and often the bigger one: lower effort means fewer reasoning tokens, which is less latency and less money at the same quality for work like this.
 

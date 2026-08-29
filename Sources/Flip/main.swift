@@ -12,13 +12,16 @@ nonisolated(unsafe) let flipArguments = arguments
 if arguments.first == "--set-key" {
     FileHandle.standardError.write(Data("Paste the API key for provider '\(Settings.shared.provider.rawValue)' and press return.\nAn empty line clears the stored key.\n".utf8))
     let line = (readLine(strippingNewline: true) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    Settings.shared.apiKey = line
+    Settings.shared.storeAPIKey(line)
     let stored = Settings.shared.apiKey
     if line.isEmpty {
         FileHandle.standardError.write(Data("cleared the stored key\n".utf8))
         exit(0)
     }
     FileHandle.standardError.write(Data("stored \(stored.count) characters in the login Keychain\n".utf8))
+    if let problem = Settings.shared.keyProblem {
+        FileHandle.standardError.write(Data("WARNING: \(problem)\n".utf8))
+    }
     exit(stored.isEmpty ? 1 : 0)
 }
 
