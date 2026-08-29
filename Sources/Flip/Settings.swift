@@ -115,6 +115,9 @@ enum Language {
 
 // MARK: - Settings
 
+/// Carries a value out of the background read without capturing a mutable local.
+private final class KeyBox: @unchecked Sendable { var value: String? }
+
 final class Settings: ObservableObject {
     static let shared = Settings()
 
@@ -240,10 +243,32 @@ final class Settings: ObservableObject {
 
     /// The key as it should be sent, waiting for the Keychain if it has not been read yet.
     /// Never call this from the main thread.
-    func usableAPIKeyBlocking() -> String {
+    ///
+    /// Bounded, because the wait is not always short. A Keychain item's access control names the
+    /// executable that created it, so installing a new build makes macOS put up a password
+    /// dialog and hold the read until someone answers. A command-line process has no window to
+    /// show that in, and would otherwise sit there indefinitely with no output at all.
+    func usableAPIKeyBlocking(timeout: TimeInterval = 6) -> String {
         if apiKeyLoaded { return Settings.sanitize(apiKey) }
-        return Settings.sanitize(Keychain.get(account: keychainAccount) ?? "")
+
+        let account = keychainAccount
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = KeyBox()
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.value = Keychain.get(account: account)
+            semaphore.signal()
+        }
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            keychainTimedOut = true
+            return ""
+        }
+        return Settings.sanitize(box.value ?? "")
     }
+
+    /// True when the last Keychain read gave up waiting, which means a dialog is on screen.
+    private(set) var keychainTimedOut = false
+
+    static let keychainBlockedMessage = "macOS is asking for your login password before it will hand the API key to this copy of Flip, and is waiting on a dialog somewhere on screen. Answer it and choose Always Allow. A Keychain item is bound to the exact program that saved it, so a new build has to be let in once."
 
     /// What the interface shows. Empty until `loadAPIKey()` has finished.
     var usableAPIKey: String { Settings.sanitize(apiKey) }

@@ -104,11 +104,16 @@ enum Doctor {
         // and this process exits before that lands, which used to print MISSING over a
         // perfectly good key.
         let key = settings.usesCLILogin ? "" : settings.usableAPIKeyBlocking()
-        if !settings.usesCLILogin {
+        if settings.keychainTimedOut {
+            print("API key             BLOCKED by a password dialog")
+            problems.append(Settings.keychainBlockedMessage)
+        }
+        if !settings.usesCLILogin && !settings.keychainTimedOut {
             print("API key             \(key.isEmpty ? "MISSING" : "present, \(key.count) characters")")
         }
-        if settings.usesCLILogin {
-            // The credential comes from the CLI; there is no stored key to inspect.
+        if settings.usesCLILogin || settings.keychainTimedOut {
+            // Nothing to inspect: either the credential comes from the CLI, or the Keychain
+            // never handed it over.
         } else if key.isEmpty {
             problems.append("No API key stored. Open the menu bar icon, then Settings, and paste one in.")
         } else {

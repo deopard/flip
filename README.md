@@ -150,6 +150,8 @@ That builds it, copies it to `/Applications`, and reopens it. Spotlight does not
 
 ## First run: two things to set
 
+**A note on the password dialog.** After installing a new version, macOS will ask for your login password before it hands the API key over, once. Click **Always Allow**. A Keychain item's access control names the exact program that saved it, so a new build has to be let in; the app's own code signature does not carry over to that, only to the Accessibility permission. The alternative is keeping the key in a plain file, which this app deliberately does not do.
+
 **1. Accessibility permission.** macOS will ask on first launch. Open System Settings, go to Privacy & Security, then Accessibility, and turn Flip on. Without it the app cannot read your selection or paste the translation back.
 
 If the build is signed ad hoc, every rebuild produces a different signature, macOS treats it as a different app, and it drops this permission and re-asks for your Keychain password. Run this once to stop that:

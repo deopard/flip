@@ -8,6 +8,7 @@ struct TranslationOutcome {
 
 enum TranslatorError: LocalizedError {
     case missingKey
+    case keychainBlocked
     case emptyInput
     case tooLong(Int)
     case badURL(String)
@@ -20,6 +21,8 @@ enum TranslatorError: LocalizedError {
         switch self {
         case .missingKey:
             return "No API key. Open Flip > Settings and paste one in."
+        case .keychainBlocked:
+            return Settings.keychainBlockedMessage
         case .emptyInput:
             return "Nothing selected. Select some text first, or put the cursor in a text field."
         case .tooLong(let n):
@@ -89,6 +92,7 @@ enum Translator {
             }
         }
         if !settings.usesCLILogin {
+            if settings.keychainTimedOut { throw TranslatorError.keychainBlocked }
             guard !apiKey.isEmpty else { throw TranslatorError.missingKey }
         }
 
